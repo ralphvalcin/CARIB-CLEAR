@@ -1,0 +1,28 @@
+{"task": "kreyol_to_french", "text": "Bonjou, kijan ou ye?"}
+{"task": "kreyol_to_french", "text": "Mwen renmen manje diri ak pwa."}
+{"task": "kreyol_to_french", "text": "Kijan pou plante mayi nan sezon ete?"}
+{"task": "kreyol_to_english", "text": "Mwen renmen manje diri ak pwa."}
+{"task": "kreyol_to_english", "text": "Pòtoprens se kapital Ayiti."}
+{"task": "kreyol_to_english", "text": "Kijan ou fè pou alé nan lekòl?"}
+{"task": "french_to_kreyol", "text": "Comment puis-je aller à l'école?"}
+{"task": "french_to_kreyol", "text": "Je suis content de voir mes amis."}
+{"task": "french_to_kreyol", "text": "Quelle est la capitale d'Haïti?"}
+{"task": "kreyol_summarize", "text": "Lendi pase, yon gwo inondasyon te frape Pòtoprens. Dlo te kouvri anpil kay nan zòn Delmas. SNEP te di 12 moun te mouri."}
+{"task": "kreyol_summarize", "text": "Gouvènman an te anonse yon pwogram pou ede plantè kafe ak kach nan sid peyi a. Prè $2M ap deple yo."}
+{"task": "kreyol_summarize", "text": "Yon etid konfime: klima Ayiti ap chanje. Sezon lapli pi dir, sezon chalè pi cho. Kanzan ap frape plis sou kòt."}
+{"task": "kreyol_ner", "text": "Dr. Jean Baptiste travay nan lopital Justinien nan Pòtoprens."}
+{"task": "kreyol_ner", "text": "Manman Sylvie nan mache Croix-des-Bouquets."}
+{"task": "kreyol_ner", "text": "Etazini ak Kanada ap ede Ayiti apre tranbleman."}
+{"task": "kreyol_sentiment", "text": "Mwen trè kontan ak pwogrè lekòl pitit mwen an!"}
+{"task": "kreyol_sentiment", "text": "Sa twò lwen kont mwen. Mwen pa gen lajan pou peye lekòl."}
+{"task": "kreyol_sentiment", "text": "Nouvo lekòl ap bati nan kominote nou. Moun kontan."}
+{"task": "agriculture_qa", "text": "Kijan ou konnen kann nan bon pou rekòlt?"}
+{"task": "agriculture_qa", "text": "Ki kalite tè ki bon pou plante maniok?"}
+{"task": "agriculture_qa", "text": "Kilè sezon rekòlt mango nan Ayiti?"}
+{"task": "agriculture_qa", "text": "Kisan pou pepinyen kafe?"}
+{"task": "agriculture_qa", "text": "Ki maladi ki atake kann?"}
+{"task": "health_qa", "text": "Ki siy danje pou yon fanmsyèn pandan fanmi?"}
+{"task": "health_qa", "text": "Kijan pou pwoteje timoun kont malaria?"}
+{"task": "health_qa", "text": "Kisa bon manje pou fanmsyèn?"}
+{"task": "health_qa", "text": "Kijan pou trete dyare nan timoun?"}
+{"task": "health_qa", "text": "Poukisa dlo pwòp enpòtan?"}
