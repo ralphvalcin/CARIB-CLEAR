@@ -1,0 +1,25 @@
+{
+    "governance": {
+        "ml_high_threshold": 0.7,
+        "ml_low_threshold": 0.3,
+        "rl_consensus_threshold": 0.6,
+        "sentiment_shock_threshold": -0.6,
+        "ml_consensus_threshold": 0.65
+    },
+    "compliance": {
+        "kyc_threshold": 0.7,
+        "aml_risk_threshold": 0.6,
+        "sanctions_check_threshold": 0.9,
+        "pep_check_threshold": 0.8
+    },
+    "fx_settlement": {
+        "max_slippage_bps": 50,
+        "min_liquidity_usd": 10000,
+        "max_settlement_time_min": 30
+    },
+    "msme_credit": {
+        "min_cashflow_score": 0.6,
+        "max_debt_service_ratio": 0.4,
+        "min_operating_history_months": 6
+    }
+}
