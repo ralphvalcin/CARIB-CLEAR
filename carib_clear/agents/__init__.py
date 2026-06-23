@@ -83,4 +83,7 @@ __all__ = [
     "PoolQuote",
     "TradeFinanceModule",
     "FactoringRequest",
+    "FactoringEvaluation",
+    "FactoringAgreement",
+    "DebtorAssessment",
 ]

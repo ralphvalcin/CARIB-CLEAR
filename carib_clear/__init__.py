@@ -11,8 +11,10 @@ from .agents import (
     CreditProfileGenerator,
     DataAggregationAgent,
     FlowVisibilityAgent,
+    LiquidityPoolManager,
     NetSettlementAgent,
     P2PMatchingEngine,
+    TradeFinanceModule,
 )
 from .broker import (
     BaritaLenderAdapter,
@@ -25,23 +27,27 @@ from .broker import (
     StellarAdapter,
 )
 from .governance import GovernanceAgent, SqliteApprovalQueue
+from .voice_bridge import VoiceLoanBridge
 
 __all__ = [
     "BaritaLenderAdapter",
     "JMMBLenderAdapter",
     "IDBInvestLenderAdapter",
     "CashFlowLendingEngine",
+    "ComplianceAgent",
     "CreditProfileGenerator",
     "DataAggregationAgent",
     "FlowVisibilityAgent",
-    "P2PMatchingEngine",
-    "NetSettlementAgent",
-    "ComplianceAgent",
-    "MultiRailBroker",
-    "MultiRailRouter",
-    "StellarAdapter",
+    "GovernanceAgent",
+    "LiquidityPoolManager",
     "LocalACHAdapter",
     "MobileMoneyAdapter",
-    "GovernanceAgent",
+    "MultiRailBroker",
+    "MultiRailRouter",
+    "NetSettlementAgent",
+    "P2PMatchingEngine",
     "SqliteApprovalQueue",
+    "StellarAdapter",
+    "TradeFinanceModule",
+    "VoiceLoanBridge",
 ]
