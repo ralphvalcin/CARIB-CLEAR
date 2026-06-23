@@ -88,5 +88,55 @@ def test_voice_config_defaults() -> None:
     config = VoiceConfig()
     assert config.sample_rate == 16000
     assert config.whisper_model_size == "tiny"
-    assert config.tts_engine == "piper"
+    assert config.tts_engine == "kokoro"
     assert config.in_process is True
+
+
+def test_kokoro_tts_import() -> None:
+    """Verify KokoroTTS can be imported and instantiated."""
+    from jarvis.voice.kokoro_tts import KOKORO_VOICES, KokoroTTSBackend
+
+    tts = KokoroTTSBackend()
+    assert tts.voice == "af_heart"
+
+    voices = tts.available_voices()
+    assert len(voices) == 7  # 4 English + 3 multilingual
+    assert any(v["id"] == "af_heart" for v in voices)
+    assert any(v["id"] == "am_michael" for v in voices)
+    assert any(v["id"] == "am_liam" for v in voices)
+
+
+def test_kokoro_voice_switching() -> None:
+    """Verify voice switching works."""
+    from jarvis.voice.kokoro_tts import KokoroTTSBackend
+
+    tts = KokoroTTSBackend(voice="af_heart")
+    assert tts.voice == "af_heart"
+
+    tts.voice = "am_michael"
+    assert tts.voice == "am_michael"
+
+    # Unknown voice should not change
+    tts.voice = "nonexistent"
+    assert tts.voice == "am_michael"  # unchanged
+
+
+def test_kokoro_tts_synthesize() -> None:
+    """Verify synthesis returns WAV bytes."""
+    from jarvis.voice.kokoro_tts import KokoroTTSBackend
+
+    tts = KokoroTTSBackend(voice="af_heart", speed=1.0)
+    audio = tts.synthesize("Hello world")
+    assert isinstance(audio, bytes)
+    assert len(audio) > 1000  # Should have actual audio data
+    # WAV header starts with RIFF
+    assert audio[:4] == b"RIFF"
+
+
+def test_kokoro_tts_empty_text() -> None:
+    """Verify empty text returns empty bytes."""
+    from jarvis.voice.kokoro_tts import KokoroTTSBackend
+
+    tts = KokoroTTSBackend()
+    assert tts.synthesize("") == b""
+    assert tts.synthesize("   ") == b""

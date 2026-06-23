@@ -10,15 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
 import time
-import requests
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +288,9 @@ class GovernanceAgent:
         # KYC/AML on counterparty
         for jur in [counterparty_jurisdiction, from_currency, to_currency]:
             if jur in _JURISDICTION_RULES:
-                kyc = self.run_kyc_check(jur, {"entity": "counterparty"}, {"national_id": "verified", "proof_of_address": "verified"})
+                rules = self.get_jurisdiction_rules(jur)
+                required = {doc: "verified" for doc in rules.get("kyc_required_docs", [])}
+                kyc = self.run_kyc_check(jur, {"entity": "counterparty"}, required)
                 aml = self.run_aml_check(jur, amount_usd, {})
                 sanctions = self.run_sanctions_check(jur, f"counterparty_{jur}")
                 compliance_checks.extend([kyc, aml, sanctions])
@@ -394,7 +391,9 @@ class GovernanceAgent:
         # Compliance checks
         compliance_checks = []
         for jur in [jurisdiction]:
-            kyc = self.run_kyc_check(jur, {"entity": business_id}, {"national_id": "verified", "proof_of_address": "verified"})
+            rules = self.get_jurisdiction_rules(jur)
+            required = {doc: "verified" for doc in rules.get("kyc_required_docs", [])}
+            kyc = self.run_kyc_check(jur, {"entity": business_id}, required)
             aml = self.run_aml_check(jur, requested_amount_usd, {})
             sanctions = self.run_sanctions_check(jur, business_id, "business")
             compliance_checks.extend([kyc, aml, sanctions])

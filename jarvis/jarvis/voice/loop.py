@@ -267,9 +267,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--tts",
-        default="piper",
-        choices=["say", "piper", "none"],
-        help="TTS engine (default: piper)",
+        default="kokoro",
+        choices=["say", "piper", "kokoro", "none"],
+        help="TTS engine (default: kokoro — local open-source, no model files needed)",
     )
     parser.add_argument(
         "--sensitivity",

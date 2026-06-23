@@ -90,7 +90,7 @@ Traditional APIs fail because:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Agent Swarm (LangGraph on H200)
+### Agent Swarm
 
 | Agent | Role | Key Capability |
 |-------|------|----------------|
@@ -102,7 +102,8 @@ Traditional APIs fail because:
 | **DataAggregation** | ETL | POS + Invoice + Bank + Tax → unified profile |
 | **CreditProfile** | AI scoring | Cash-flow risk without collateral |
 | **CashFlowLending** | Decision engine | Unsecured loan approval + terms |
-| **Governance** | Policy enforcement | HITL approval + policy engine |
+| **TradeFinance** | Factoring | Invoice discounting and trade finance |
+| **VoiceBridge** | Voice UI | Kreyòl/English loan intent extraction |
 
 ---
 
@@ -155,8 +156,8 @@ JURISDICTION_RULES = {
 
 **Kreyol-AI** (QLoRA Llama 3.1-8B) + JARVIS voice pipeline:
 - **STT:** faster-whisper (Kreyol/English/Spanish/French)
-- **LLM:** `kreyol:3b` on Ollama (fine-tuned for finance)
-- **TTS:** Piper (low-latency, natural)
+- **LLM:** Ollama via intent extraction (fine-tuned for finance)
+- **TTS:** Kokoro (open-source, 4.5 MOS, 82M params)
 - **VAD + Interruption:** Natural conversation flow
 
 **Impact:** Haiti = largest remittance corridor ($3.8B/yr), lowest financial inclusion, highest mobile penetration. Voice-first UI unlocks access for non-literate merchants.

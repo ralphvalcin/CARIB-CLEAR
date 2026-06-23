@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import json
 import logging
 import os
@@ -88,10 +88,31 @@ class VoiceConfig:
     api_key: str = ""
 
     # TTS
-    tts_engine: str = "piper"  # "say", "piper", "none"
+    tts_engine: str = "kokoro"  # "say", "piper", "kokoro", "none"
     piper_path: str = "/usr/local/bin/piper"
     piper_voice: str = "en_US-lessac-medium"
     piper_rate: float = 1.0
+    kokoro_voice: str = "af_heart"
+    kokoro_rate: float = 1.0
+
+    # LLM
+    llm_engine: str = "ollama"  # "ollama", "openai"
+    llm_model: str = "llama3.2:3b"
+    llm_fallback_engine: str = ""  # empty = no fallback
+    llm_fallback_model: str = "gpt-4o-mini"
+    llm_temperature: float = 0.7
+    llm_max_tokens: int = 256
+    llm_timeout: float = 30.0
+    ollama_base_url: str = "http://localhost:11434"
+    openai_base_url: str = ""
+    openai_api_key: str = ""
+
+    # MCP — Model Context Protocol for dynamic tool discovery
+    mcp_servers: List[Dict[str, Any]] = field(default_factory=list)
+    """List of MCP server config dicts, e.g.:
+    [{"name": "weather", "command": "uvx", "args": ["weather-mcp"]}]
+    """
+    mcp_enabled: bool = False
 
     # Sensitivity — adjusts voice/silence multiplier vs ambient
     sensitivity: str = "medium"  # "low", "medium", "high"
@@ -319,17 +340,32 @@ class AudioCapture:
 # ── Transcriber ─────────────────────────────────────────────────────────────
 
 class Transcriber:
-    """Speech-to-text via faster-whisper."""
+    """Speech-to-text via registered backends (default: faster-whisper).
+
+    Dispatches to the backend registered in SpeechRegistry for the configured
+    STT engine. This makes it trivial to add new STT backends — just create a
+    module, decorate with ``@SpeechRegistry.register("name")``, and it's
+    auto-discovered.
+    """
 
     def __init__(self, config: VoiceConfig) -> None:
         self.config = config
-        self._model = None
-        self._lock = threading.Lock()
+        self._backend: Any = None
+        self._loaded: bool = False
 
-    def _load(self) -> None:
-        if self._model is not None:
-            return
-        from faster_whisper import WhisperModel
+    def _ensure_backend(self) -> Any:
+        """Lazy-load the STT backend from the registry."""
+        if self._loaded:
+            return self._backend
+
+        # Auto-discover speech backends
+        from jarvis.voice.registry import SpeechRegistry
+
+        SpeechRegistry.auto_discover("jarvis.voice.backends.faster_whisper")
+
+        backend_cls = SpeechRegistry.get("faster-whisper")
+        if backend_cls is None:
+            raise RuntimeError("No STT backend registered")
 
         logger.info(
             "Loading Whisper model '%s' on device=%s compute=%s",
@@ -337,70 +373,66 @@ class Transcriber:
             self.config.whisper_device,
             self.config.whisper_compute_type,
         )
-        self._model = WhisperModel(
-            self.config.whisper_model_size,
+        self._backend = backend_cls(
+            model_size=self.config.whisper_model_size,
             device=self.config.whisper_device,
             compute_type=self.config.whisper_compute_type,
         )
+        self._loaded = True
+        return self._backend
 
     def cleanup(self) -> None:
         """Release the Whisper model to free ~1GB RAM."""
-        self._model = None
+        if self._backend is not None:
+            self._backend.cleanup()
+        self._backend = None
+        self._loaded = False
         logger.debug("Whisper model released")
 
     def transcribe(self, audio: np.ndarray) -> str:
-        """Transcribe audio (int16) to text."""
-        self._load()
-
-        # Convert int16 to float32 (faster-whisper expects float32 in [-1, 1])
-        audio_float = audio.astype(np.float32) / 32768.0
-
-        with self._lock:
-            segments, info = self._model.transcribe(audio_float, beam_size=5, language="en")
-            text = " ".join(seg.text for seg in segments)
-
-        if not text.strip():
-            return ""
-
-        # Determine language from first segment metadata
-        lang = getattr(info, "language", None) or "en"
-        logger.debug("Transcribed (lang=%s): %s", lang, text[:80])
-        return text.strip()
+        """Transcribe audio (int16) to text via registry backend."""
+        backend = self._ensure_backend()
+        return backend.transcribe(audio, language="en")
 
 
 # ── TTS Engine ────────────────────────────────────────────────────────────────
 
 
 class TTSEngine:
-    """Text-to-speech output through system speakers."""
+    """Text-to-speech output through system speakers.
+
+    Dispatches to backends registered in TTSRegistry. Adding a new TTS engine
+    is a single file with ``@TTSRegistry.register("name")`` — no changes
+    needed in this class.
+
+    Built-in engines: kokoro (default, recommended), piper (legacy), say.
+    """
 
     def __init__(self, config: VoiceConfig) -> None:
         self.config = config
-        self._piper_voice = None  # lazy-loaded
-        self._voice_manager = VoiceManager()
-        self._playback_process: Optional["subprocess.Popen[bytes]"] = None
+        self._backend: Any = None  # Lazy-loaded TTSBackend instance
+        self._loaded: bool = False
         self._interrupted: bool = False
         self.last_speech_at: float = 0.0
         self.last_speech_till: float = 0.0
 
     def cleanup(self) -> None:
-        """Release the Piper voice model and kill any active playback."""
-        self._stop_playback()
-        self._piper_voice = None
+        """Release loaded models."""
+        if self._backend is not None:
+            self._backend.cleanup()
+        self._backend = None
+        self._loaded = False
 
     def interrupt(self) -> None:
         """Interrupt TTS playback immediately (user is speaking over it)."""
         self._interrupted = True
-        self._stop_playback()
+        import sounddevice as _sd
+        try:
+            _sd.stop()
+        except Exception:
+            pass
 
-    def _stop_playback(self) -> None:
-        """Kill any running afplay playback process."""
-        if self._playback_process is not None:
-            try:
-                self._playback_process.kill()
-            except Exception:
-                pass
-            self._playback_process = None
+    # ── High-level API ──────────────────────────────────────────────────────
 
     def speak(self, text: str) -> None:
         """Speak text through default audio output."""
@@ -408,223 +440,141 @@ class TTSEngine:
             return
 
         engine = self.config.tts_engine
-        logger.debug("TTS (%s): %s", engine, text[:60])
-
-        if engine == "say":
-            self._speak_say(text)
-        elif engine == "piper":
-            self._speak_piper(text)
-        elif engine == "none":
+        if engine == "none":
             logger.info("TTS suppressed: %s", text)
-        else:
-            logger.warning("Unknown TTS engine: %s", engine)
+            return
+
+        logger.debug("TTS (%s): %s", engine, text[:60])
+        backend = self._ensure_backend()
+        if backend is None:
+            logger.warning("No TTS backend available for engine '%s'", engine)
+            return
+
+        try:
+            audio_bytes = backend.synthesize(text)
+            if not audio_bytes:
+                return
+            self._play_audio(audio_bytes)
+        except Exception as exc:
+            logger.error("TTS (%s) failed: %s", engine, exc)
 
     def speak_streaming(self, text_generator) -> None:
-        """Truly streaming TTS: speak the first sentence as soon as it forms.
+        """Streaming TTS: speak sentences as they arrive from the LLM.
 
-        Accumulates tokens from the generator into a buffer. When a sentence
-        boundary is reached (ending with . ! or ?), immediately starts
-        synthesizing and playing that sentence while continuing to collect
-        more tokens for the next one.
+        Works with any registered backend. Each sentence is synthesized
+        and played via sounddevice as it arrives.
         """
         import re as _re
-        import tempfile
-        import wave
 
         if not text_generator:
             return
 
-        buffer = ""
-        prev_process: Optional["subprocess.Popen[bytes]"] = None
-        piper_loaded = False
+        engine = self.config.tts_engine
+        if engine == "none":
+            # Consume and discard generator
+            for _ in text_generator:
+                pass
+            return
+
         self._interrupted = False
+        backend = self._ensure_backend()
+        if backend is None:
+            for _ in text_generator:
+                pass
+            return
 
-        def _synthesize_and_play(sentence: str) -> Optional["subprocess.Popen[bytes]"]:
-            """Synthesize a single sentence and play it, returning the process."""
-            nonlocal piper_loaded
-            try:
-                if not piper_loaded:
-                    self._ensure_piper_loaded()
-                    piper_loaded = True
-
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                    wav_path = tmp.name
-
-                wav_file = wave.open(wav_path, "w")
-                wav_file.setnchannels(1)
-                wav_file.setsampwidth(2)
-                wav_file.setframerate(22050)
-                self._piper_voice.synthesize_wav(sentence, wav_file)
-                wav_file.close()
-
-                proc = subprocess.Popen(["afplay", wav_path])
-                proc._wav_path = wav_path  # type: ignore[attr-defined]
-                self.last_speech_at = time.time()
-                return proc
-            except Exception as exc:
-                logger.error("Streaming TTS synthesis failed: %s", exc)
-                return None
+        buffer = ""
 
         for token in text_generator:
             if self._interrupted:
-                logger.debug("TTS interrupted mid-stream")
+                logger.debug("TTS streaming interrupted")
                 break
             buffer += token
 
-            # Check if buffer contains a complete sentence
+            # Flush on sentence boundaries
             match = _re.search(r"(.*?[.!?])\s*$", buffer)
             if match:
                 sentence = match.group(1).strip()
                 if sentence:
-                    # Wait for previous playback to finish
-                    if prev_process is not None:
-                        try:
-                            prev_process.wait(timeout=30)
-                        except Exception:
-                            pass
-                        try:
-                            Path(prev_process._wav_path).unlink(missing_ok=True)  # type: ignore[attr-defined]
-                        except Exception:
-                            pass
+                    self._speak_sentence_streaming(backend, sentence)
+                buffer = ""
 
-                    # Synthesize this sentence and start playback
-                    proc = _synthesize_and_play(sentence)
-                    if proc:
-                        prev_process = proc
-                    buffer = ""
-
-        # Handle any remaining text in buffer (no sentence-ending punctuation)
+        # Flush remaining text
         buffer = buffer.strip()
-        if buffer:
-            if prev_process is not None:
-                try:
-                    prev_process.wait(timeout=30)
-                except Exception:
-                    pass
-                try:
-                    Path(prev_process._wav_path).unlink(missing_ok=True)  # type: ignore[attr-defined]
-                except Exception:
-                    pass
-            proc = _synthesize_and_play(buffer)
-            if proc:
-                prev_process = proc
+        if buffer and not self._interrupted:
+            self._speak_sentence_streaming(backend, buffer)
 
-        # Wait for last playback and set end timestamp
-        if prev_process is not None:
-            try:
-                prev_process.wait(timeout=30)
-            except Exception:
-                pass
-            self.last_speech_till = time.time()
-            try:
-                Path(prev_process._wav_path).unlink(missing_ok=True)  # type: ignore[attr-defined]
-            except Exception:
-                pass
+        self.last_speech_till = time.time()
 
-    def _ensure_piper_loaded(self) -> None:
-        """Load the Piper voice model if not already loaded."""
-        if self._piper_voice is not None:
-            return
-        from piper import PiperVoice
-        voice_dir = Path(__file__).resolve().parent.parent.parent / "piper_voices"
-        flag = voice_dir / ".voice_changed"
-        if flag.exists():
-            flag.unlink(missing_ok=True)
-        selected_id = self._voice_manager.get_selected_voice()
-        paths = self._voice_manager.get_voice_paths(selected_id)
-        if not paths:
-            self._voice_manager.select_voice("en_US-lessac-medium")
-            paths = self._voice_manager.get_voice_paths("en_US-lessac-medium")
-            if not paths:
-                raise FileNotFoundError("Default voice not available")
-        onnx_path = paths["onnx"]
-        config_path = paths["json"]
-        logger.info("Loading Piper voice '%s' from %s", selected_id, onnx_path)
-        self._piper_voice = PiperVoice.load(onnx_path, config_path=config_path)
+    # ── Backend management ──────────────────────────────────────────────────
 
-    def _speak_say(self, text: str) -> None:
-        """Use macOS `say` command."""
-        cleaned = text.replace('"', "'")
-        try:
-            subprocess.run(
-                ["say", cleaned],
-                timeout=120,
-                capture_output=True,
-            )
-            self.last_speech_till = time.time()
-        except subprocess.TimeoutExpired:
-            logger.warning("TTS timed out")
-        except FileNotFoundError:
-            logger.error("`say` command not found — TTS unavailable")
+    def _ensure_backend(self) -> Any:
+        """Lazy-load the TTS backend from the registry."""
+        if self._loaded:
+            return self._backend
 
-    def _speak_piper(self, text: str) -> None:
-        """Use Piper TTS for natural-sounding voice output.
+        engine = self.config.tts_engine
 
-        Lazy-loads the Piper voice model and writes a temp WAV for playback.
-        Checks the voice change flag before loading to pick up voice switches.
-        """
-        import tempfile
-        import wave
+        # Auto-discover all TTS backends
+        from jarvis.voice.registry import TTSRegistry
+
+        TTSRegistry.auto_discover("jarvis.voice.backends.kokoro")
+        TTSRegistry.auto_discover("jarvis.voice.backends.piper")
+        TTSRegistry.auto_discover("jarvis.voice.backends.say")
+
+        if not TTSRegistry.contains(engine):
+            logger.error("No TTS backend registered for '%s'. Available: %s", engine, TTSRegistry.available())
+            self._loaded = True  # Don't retry on every speak()
+            return None
+
+        backend_cls = TTSRegistry.get(engine)
+        kwargs = self._backend_kwargs(engine)
+        logger.info("Loading TTS backend '%s' with %s", engine, kwargs)
+        self._backend = backend_cls(**kwargs)
+        self._loaded = True
+        return self._backend
+
+    def _backend_kwargs(self, engine: str) -> dict:
+        """Return backend-specific init kwargs from config."""
+        if engine == "kokoro":
+            return {"voice": self.config.kokoro_voice, "speed": self.config.kokoro_rate}
+        if engine == "piper":
+            return {"voice": self.config.piper_voice}
+        return {}
+
+    # ── Audio playback ──────────────────────────────────────────────────────
+
+    def _play_audio(self, audio_bytes: bytes) -> None:
+        """Play WAV/AIFF audio bytes through system speakers."""
+        import io as _io
+        import sounddevice as _sd
+        import soundfile as _sf
 
         try:
-            if self._piper_voice is None:
-                from piper import PiperVoice
-
-                voice_dir = (
-                    Path(__file__).resolve().parent.parent.parent / "piper_voices"
-                )
-                # Check if voice was changed via API
-                flag = voice_dir / ".voice_changed"
-                if flag.exists():
-                    flag.unlink(missing_ok=True)
-                selected_id = self._voice_manager.get_selected_voice()
-                paths = self._voice_manager.get_voice_paths(selected_id)
-                if not paths:
-                    logger.error("Voice '%s' not found — falling back to default", selected_id)
-                    self._voice_manager.select_voice("en_US-lessac-medium")
-                    paths = self._voice_manager.get_voice_paths("en_US-lessac-medium")
-                    if not paths:
-                        raise FileNotFoundError("Default voice not available")
-                onnx_path = paths["onnx"]
-                config_path = paths["json"]
-                logger.info("Loading Piper voice '%s' from %s", selected_id, onnx_path)
-                self._piper_voice = PiperVoice.load(
-                    onnx_path, config_path=config_path
-                )
-
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                wav_path = tmp.name
-
-            wav_file = wave.open(wav_path, "w")
-            wav_file.setnchannels(1)
-            wav_file.setsampwidth(2)
-            wav_file.setframerate(22050)
-            self._piper_voice.synthesize_wav(text, wav_file)
-            wav_file.close()
-
+            data, sr = _sf.read(_io.BytesIO(audio_bytes))
             self.last_speech_at = time.time()
-            # Estimate TTS playback end time for echo suppression
-            # Piper at 22050Hz: ~12 chars/sec for English. Add 0.5s buffer.
-            est_duration = max(len(text) / 12, 0.5) + 0.3
+            est_duration = len(data) / sr
             self.last_speech_till = time.time() + est_duration
-            self._playback_process = subprocess.Popen(
-                ["afplay", wav_path],
-            )
-            # Clean up wav file in a background thread after a delay
-            def _cleanup_wav() -> None:
-                time.sleep(30.0)
-                try:
-                    Path(wav_path).unlink(missing_ok=True)
-                except Exception:
-                    pass
-
-            threading.Thread(target=_cleanup_wav, daemon=True).start()
-
+            _sd.play(data, samplerate=sr)
         except Exception as exc:
-            logger.error("Piper TTS failed: %s", exc)
-        finally:
-            # wav cleanup is handled in a background thread
-            pass
+            logger.error("Audio playback failed: %s", exc)
+
+    def _speak_sentence_streaming(self, backend: Any, sentence: str) -> None:
+        """Synthesize a single sentence and play it synchronously."""
+        import io as _io
+        import sounddevice as _sd
+        import soundfile as _sf
+
+        try:
+            audio_bytes = backend.synthesize(sentence)
+            if not audio_bytes:
+                return
+            data, sr = _sf.read(_io.BytesIO(audio_bytes))
+            self.last_speech_at = time.time()
+            _sd.play(data, samplerate=sr)
+            _sd.wait()  # Block until sentence finishes
+        except Exception as exc:
+            logger.error("Streaming TTS playback failed: %s", exc)
 
 
 # ── Response Formatter ──────────────────────────────────────────────────────
@@ -724,37 +674,106 @@ class JarvisClient:
             return {"error": str(exc), "path": "error"}
 
 
-# ── Voice LLM Client (new) ────────────────────────────────────────────────────
+# ── Voice LLM Client ────────────────────────────────────────────────────────────
+
 
 class VoiceLLMClient:
     """Conversational LLM client for the voice loop.
 
-    Uses StreamingLLM + Conversation to talk directly to the LLM with
-    proper voice-optimized prompts and conversation history, bypassing
-    the JarvisApp routing layer. Optional Tavily web search for current
-    events queries.
+    Uses LLMEngine (with backend resolution and fallback) to talk to the
+    configured LLM with proper voice-optimized prompts and conversation
+    history. Bypasses the JarvisApp routing layer for direct conversational
+    interaction. Optional Tavily web search for current events queries.
+
+    The engine is configurable — switch between Ollama, OpenAI, or any
+    registered backend from VoiceConfig.
     """
 
-    def __init__(self, enable_search: bool = True) -> None:
-        from jarvis.voice.llm_client import Conversation, StreamingLLM
+    def __init__(
+        self,
+        enable_search: bool = True,
+        config: Optional["VoiceConfig"] = None,
+    ) -> None:
+        from jarvis.voice.engine import LLMConfig, LLMEngine, VOICE_SYSTEM_PROMPT
+        from jarvis.voice.registry import Conversation
 
-        self.llm = StreamingLLM()
-        self.conversation = Conversation()
+        if config:
+            llm_config = LLMConfig(
+                engine=config.llm_engine,
+                model=config.llm_model,
+                fallback_engine=config.llm_fallback_engine,
+                fallback_model=config.llm_fallback_model,
+                temperature=config.llm_temperature,
+                max_tokens=config.llm_max_tokens,
+                timeout=config.llm_timeout,
+                ollama_base_url=config.ollama_base_url,
+                openai_base_url=config.openai_base_url,
+                openai_api_key=config.openai_api_key,
+            )
+        else:
+            llm_config = LLMConfig()
+
+        self.engine = LLMEngine(llm_config)
         self._search_enabled = enable_search
-        logger.info("VoiceLLMClient initialized (search=%s)", enable_search)
+
+        # Build system prompt with optional MCP tool context
+        system_prompt = VOICE_SYSTEM_PROMPT
+
+        # Discover MCP tools if configured
+        self._mcp: Any = None
+        if config and config.mcp_enabled and config.mcp_servers:
+            system_prompt = self._init_mcp(config, system_prompt)
+
+        self.conversation = Conversation(system_prompt=system_prompt)
+        logger.info(
+            "VoiceLLMClient initialized (engine=%s, model=%s, search=%s, fallback=%s, mcp=%s)",
+            llm_config.engine, llm_config.model, enable_search,
+            llm_config.fallback_engine or "none",
+            config.mcp_enabled if config else False,
+        )
+
+    def _init_mcp(self, config: "VoiceConfig", base_prompt: str) -> str:
+        """Initialize MCP tool discovery and augment the system prompt."""
+        from jarvis.voice.mcp_client import MCPManager, MCPServerConfig
+
+        try:
+            server_configs = [
+                MCPServerConfig(
+                    name=s["name"],
+                    command=s["command"],
+                    args=s.get("args", []),
+                    env=s.get("env", {}),
+                    enabled=s.get("enabled", True),
+                )
+                for s in config.mcp_servers
+            ]
+
+            self._mcp = MCPManager(server_configs)
+            tool_count = self._mcp.discover()
+
+            if tool_count > 0:
+                tool_block = self._mcp.tools_for_llm()
+                augmented = f"{base_prompt}\n\n{tool_block}"
+                logger.info("MCP: %d tools discovered across %d servers", tool_count, len(server_configs))
+                return augmented
+
+        except Exception as exc:
+            logger.warning("MCP initialization failed: %s", exc)
+
+        return base_prompt
 
     def send(self, text: str) -> str:
         """Send user text to LLM and return the full response."""
         self._inject_search(text)
         self.conversation.add_user(text)
-        response = self.llm.chat(self.conversation)
+        response = self.engine.chat(self.conversation)
         return response
 
     def stream_send(self, text: str):
         """Send user text to LLM and yield response tokens as they arrive."""
         self._inject_search(text)
         self.conversation.add_user(text)
-        yield from self.llm.stream_chat(self.conversation)
+        yield from self.engine.stream_chat(self.conversation)
 
     def _inject_search(self, text: str) -> None:
         """Run Tavily search if needed and inject results as conversation context.

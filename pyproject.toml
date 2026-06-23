@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carib-clear"
+version = "0.1.0-buildathon"
+description = "CARICOM FX Swap Network + MSME Credit Layer — Agentic financial infrastructure for the Caribbean"
+requires-python = ">=3.10"
+dependencies = [
+  "pydantic>=2.0",
+  "requests>=2.31",
+  "pytest>=8.0",
+]
+
+[project.optional-dependencies]
+stellar = ["stellar-sdk>=11.0"]
+voice = ["faster-whisper>=1.0", "sounddevice>=0.4", "soundfile>=0.14"]
+all = ["carib-clear[stellar]", "carib-clear[voice]"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-v"

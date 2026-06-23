@@ -59,11 +59,11 @@ class StellarAdapter(MultiRailBroker):
         self.secret_key = config.get("secret_key") or os.getenv("STELLAR_SECRET_KEY")
         self.mock_mode = config.get("mock_mode", True) if config else True
         
-        # Stellar-specific constants (only set if SDK available)
+        # Stellar-specific constants
         self.USDC_ASSET = None
         self.CURRENCY_ASSETS = {}
         self.SUPPORTED_PAIRS = []
-       
+
         if STELLAR_AVAILABLE:
             self.USDC_ASSET = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
             self.CURRENCY_ASSETS = {
@@ -80,41 +80,29 @@ class StellarAdapter(MultiRailBroker):
                 ("TTD", "USD"), ("USD", "TTD"),
                 ("XCD", "USD"), ("USD", "XCD"),
                 ("HTG", "USD"), ("USD", "HTG"),
-                # Cross pairs via USD path
                 ("BBD", "JMD"), ("JMD", "BBD"),
                 ("BBD", "TTD"), ("TTD", "BBD"),
                 ("JMD", "TTD"), ("TTD", "JMD"),
             ]
-        self.USDC_ASSET = None
-        self.CURRENCY_ASSETS = {}
-        self.SUPPORTED_PAIRS = [
-            ("BBD", "USD"), ("USD", "BBD"),
-            ("JMD", "USD"), ("USD", "JMD"),
-            ("TTD", "USD"), ("USD", "TTD"),
-            ("XCD", "USD"), ("USD", "XCD"),
-            ("HTG", "USD"), ("USD", "HTG"),
-            # Cross pairs via USD path
-            ("BBD", "JMD"), ("JMD", "BBD"),
-            ("BBD", "TTD"), ("TTD", "BBD"),
-            ("JMD", "TTD"), ("TTD", "JMD"),
-        ]
-        if STELLAR_AVAILABLE:
-            self.USDC_ASSET = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
-            self.CURRENCY_ASSETS = {
-                "USD": self.USDC_ASSET,
-                "BBD": Asset("BBD", "GBBD..."),
-                "JMD": Asset("JMD", "GJMD..."),
-                "TTD": Asset("TTD", "GTTD..."),
-                "XCD": Asset("XCD", "GXCD..."),
-                "HTG": Asset("HTG", "GHTG..."),
-            }
+        else:
+            self.CURRENCY_ASSETS = {"USD": None, "BBD": None, "JMD": None, "TTD": None, "XCD": None, "HTG": None}
+            self.SUPPORTED_PAIRS = [
+                ("BBD", "USD"), ("USD", "BBD"),
+                ("JMD", "USD"), ("USD", "JMD"),
+                ("TTD", "USD"), ("USD", "TTD"),
+                ("XCD", "USD"), ("USD", "XCD"),
+                ("HTG", "USD"), ("USD", "HTG"),
+                ("BBD", "JMD"), ("JMD", "BBD"),
+                ("BBD", "TTD"), ("TTD", "BBD"),
+                ("JMD", "TTD"), ("TTD", "JMD"),
+            ]
             logger.warning("Stellar SDK not available - running in mock mode")
             self.mock_mode = True
         
         if self.mock_mode:
             logger.info("[Stellar] Running in MOCK mode for buildathon demo")
             self._initialized = True
-            return True
+            return
         
         try:
             self.server = Server(horizon_url=self.horizon_url)
@@ -124,11 +112,34 @@ class StellarAdapter(MultiRailBroker):
                 logger.warning("No Stellar secret key - limited to read operations")
             self._initialized = True
             logger.info(f"[Stellar] Connected to {self.horizon_url}")
-            return True
         except Exception as e:
             logger.error(f"[Stellar] Initialization failed: {e}")
-            return False
+            self._initialized = False
     
+    @property
+    def rail_info(self) -> RailInfo:
+        """Return Stellar/USDC rail metadata."""
+        return RailInfo(
+            rail_id="stellar_usdc",
+            name="Stellar USDC",
+            supported_currencies=["BBD", "JMD", "TTD", "XCD", "HTG", "USD"],
+            min_amount_usd=1,
+            max_amount_usd=500000,
+            estimated_time_seconds=5,
+            fee_bps=0.1,
+            availability=0.999,
+            jurisdictions=["BB", "JM", "TT", "HT", "ECCB", "US"],
+            metadata={"network": "stellar", "bridge": "USDC"},
+        )
+
+    def initialize(self) -> bool:
+        """Initialize the Stellar connection (mock mode for buildathon)."""
+        if self.mock_mode:
+            self._initialized = True
+            return True
+        # Production init would connect to Horizon
+        return self._initialized
+
     def health_check(self) -> bool:
         """Check Stellar network health."""
         if self.mock_mode:

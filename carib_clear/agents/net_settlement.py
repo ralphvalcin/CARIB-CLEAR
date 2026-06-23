@@ -72,8 +72,8 @@ class NetSettlementAgent:
         self.settled_cycles: List[Dict[str, Any]] = []
         
         # Configuration
-        self.min_cycle_volume_usd = config.get("min_cycle_volume_usd", 10000)
-        self.max_cycle_interval_hours = config.get("max_cycle_interval_hours", 6)
+        self.min_cycle_volume_usd = self.config.get("min_cycle_volume_usd", 10000)
+        self.max_cycle_interval_hours = self.config.get("max_cycle_interval_hours", 6)
         
         # Supported currencies
         self.currencies = ["USD", "BBD", "JMD", "TTD", "XCD", "HTG"]

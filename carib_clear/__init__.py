@@ -1,6 +1,4 @@
-# carib_clear/__init__.py
-"""
-CARIB-CLEAR - CARICOM FX Swap Network + MSME Credit Layer
+"""CARIB-CLEAR - CARICOM FX Swap Network + MSME Credit Layer
 
 Agentic financial infrastructure for the Caribbean.
 """
@@ -8,21 +6,33 @@ Agentic financial infrastructure for the Caribbean.
 __version__ = "0.1.0-buildathon"
 
 from .agents import (
-    FlowVisibilityAgent,
-    P2PMatchingEngine,
-    NetSettlementAgent,
+    CashFlowLendingEngine,
     ComplianceAgent,
+    CreditProfileGenerator,
+    DataAggregationAgent,
+    FlowVisibilityAgent,
+    NetSettlementAgent,
+    P2PMatchingEngine,
 )
 from .broker import (
+    BaritaLenderAdapter,
+    IDBInvestLenderAdapter,
+    JMMBLenderAdapter,
+    LocalACHAdapter,
+    MobileMoneyAdapter,
     MultiRailBroker,
     MultiRailRouter,
     StellarAdapter,
-    LocalACHAdapter,
-    MobileMoneyAdapter,
 )
 from .governance import GovernanceAgent, SqliteApprovalQueue
 
 __all__ = [
+    "BaritaLenderAdapter",
+    "JMMBLenderAdapter",
+    "IDBInvestLenderAdapter",
+    "CashFlowLendingEngine",
+    "CreditProfileGenerator",
+    "DataAggregationAgent",
     "FlowVisibilityAgent",
     "P2PMatchingEngine",
     "NetSettlementAgent",

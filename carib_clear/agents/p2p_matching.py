@@ -210,21 +210,21 @@ class P2PMatchingEngine:
                 
                 if match_result:
                     matches.append(match_result)
-                    
+
                     # Update order statuses
                     demand.amount_usd -= match_amount
                     supply.amount_usd -= match_amount
-                    
+
                     if demand.amount_usd <= 0:
                         demand.status = "filled"
-                    elif demand.amount_usd < demand.amount_usd:
+                    elif demand.amount_usd > 0:
                         demand.status = "partially_filled"
-                    
+
                     if supply.amount_usd <= 0:
                         supply.status = "filled"
-                    elif supply.amount_usd < supply.amount_usd:
+                    elif supply.amount_usd > 0:
                         supply.status = "partially_filled"
-                    
+
                     break  # Move to next demand order
         
         return matches
