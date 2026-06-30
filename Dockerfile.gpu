@@ -1,0 +1,56 @@
+# CARIB-CLEAR — H200 GPU Deployment Container
+# Deploys the full agentic stack on NVIDIA H200 (buildathon compute).
+#
+# Usage:
+#   docker compose -f docker-compose.gpu.yml build
+#   docker compose -f docker-compose.gpu.yml up
+#
+# Requires: NVIDIA Container Toolkit on host
+#   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH="$CUDA_HOME/bin:$PATH"
+ENV LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+ENV OLLAMA_HOST=0.0.0.0
+ENV OLLAMA_KEEP_ALIVE=24h
+ENV USE_GPU=1
+
+WORKDIR /app
+
+# ── System deps ──────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    git \
+    ffmpeg \
+    libsndfile1 \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Ollama (GPU inference server) ───────────────────────
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# ── Python deps ─────────────────────────────────────────
+COPY pyproject.toml README.md ./
+RUN pip3 install --no-cache-dir -e ".[gpu,stellar]"
+
+# ── Project source ──────────────────────────────────────
+COPY carib_clear/ carib_clear/
+COPY tests/ tests/
+COPY scripts/ scripts/
+COPY config/ config/
+COPY secrets/ secrets/
+
+# ── Entrypoint ──────────────────────────────────────────
+COPY scripts/start-h200.sh /usr/local/bin/start-h200
+RUN chmod +x /usr/local/bin/start-h200
+
+EXPOSE 8000 11434
+
+CMD ["start-h200"]

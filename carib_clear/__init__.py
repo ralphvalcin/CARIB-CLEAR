@@ -27,7 +27,7 @@ from .broker import (
     StellarAdapter,
 )
 from .governance import GovernanceAgent, SqliteApprovalQueue
-from .voice_bridge import VoiceLoanBridge
+from .plugin import PluginRegistry, PluginSpec, plugin_registry
 
 __all__ = [
     "BaritaLenderAdapter",
@@ -49,5 +49,4 @@ __all__ = [
     "SqliteApprovalQueue",
     "StellarAdapter",
     "TradeFinanceModule",
-    "VoiceLoanBridge",
 ]

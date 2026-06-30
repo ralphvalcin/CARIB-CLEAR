@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# Generated secrets
+secrets/
+
 # macOS
 .DS_Store
 ._*

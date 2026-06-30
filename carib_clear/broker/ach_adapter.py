@@ -19,7 +19,8 @@ import logging
 import random
 from typing import Any, Dict, List, Optional
 
-from .base import MultiRailBroker, SettlementOrder, SettlementResult, RailInfo
+from carib_clear.broker.base import MultiRailBroker, SettlementOrder, SettlementResult, RailInfo
+from carib_clear.plugin import PluginSpec
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,18 @@ MOCK_ACH_RATES = {
 }
 
 
+@PluginSpec.register("local_ach", {
+    "type": "settlement_rail",
+    "id": "local_ach",
+    "name": "Local ACH",
+    "currencies": ["BBD", "JMD", "TTD", "XCD", "USD"],
+    "jurisdictions": ["BB", "JM", "TT", "ECCB"],
+    "fee_bps": 20,
+    "estimated_time_seconds": 7200,
+    "min_amount_usd": 50,
+    "max_amount_usd": 3000000,
+    "description": "Local ACH/RTGS — central bank settlement, 1-3 hours",
+})
 class LocalACHAdapter(MultiRailBroker):
     """
     Mock Local ACH/RTGS Adapter for Caribbean central banks.
@@ -128,6 +141,8 @@ class LocalACHAdapter(MultiRailBroker):
     
     def health_check(self) -> bool:
         """Simulate health check."""
+        if self.config.get("mock_mode", True):
+            return True
         return self._initialized and random.random() > self.mock_failure_rate
     
     def get_quote(
@@ -141,14 +156,12 @@ class LocalACHAdapter(MultiRailBroker):
         
         # Check if both currencies supported
         if from_currency.upper() not in self.jurisdiction_config["currencies"]:
-            # Check if it's a cross-jurisdiction pair (would need correspondent banking)
             return None
         if to_currency.upper() not in self.jurisdiction_config["currencies"]:
             return None
         
         rate = MOCK_ACH_RATES.get(pair)
         if not rate:
-            # Try reverse
             rev_pair = (to_currency.upper(), from_currency.upper())
             rev_rate = MOCK_ACH_RATES.get(rev_pair)
             if rev_rate:
@@ -156,12 +169,11 @@ class LocalACHAdapter(MultiRailBroker):
             else:
                 return None
         
-        # Simulate quote expiration (ACH rates fixed during operating hours)
         return {
             "rate": rate,
             "fees_bps": self.rail_info.fee_bps,
             "estimated_time_seconds": self.rail_info.estimated_time_seconds,
-            "valid_until": time.time() + 3600,  # 1 hour
+            "valid_until": time.time() + 3600,
             "settlement_type": "RTGS",
             "operating_hours": self.jurisdiction_config["operating_hours"],
         }
@@ -178,10 +190,8 @@ class LocalACHAdapter(MultiRailBroker):
                 status="failed",
             )
         
-        # Simulate processing delay
         time.sleep(0.2)
         
-        # Simulate random failure
         if random.random() < self.mock_failure_rate:
             return SettlementResult(
                 order_id=order.order_id,
@@ -191,7 +201,6 @@ class LocalACHAdapter(MultiRailBroker):
                 settlement_time_seconds=time.time() - start_time,
             )
         
-        # Calculate fees
         fees_usd = order.amount_from * self.rail_info.fee_bps / 10000
         
         return SettlementResult(
@@ -222,9 +231,8 @@ class LocalACHAdapter(MultiRailBroker):
     
     def cancel_settlement(self, order_id: str) -> bool:
         """Cancel ACH settlement (possible before batch processing)."""
-        # In real system: check if batch submitted, cancel if pending
         logger.info(f"[ACH-{self.jurisdiction}] Cancellation requested for {order_id}")
-        return True  # Mock: always cancellable
+        return True
 
 
 # ─── Multi-Jurisdiction Factory ────────────────────────────────────
@@ -259,23 +267,18 @@ class MultiJurisdictionACH:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    
-    # Test multi-jurisdiction
     ach = MultiJurisdictionACH()
     
-    # Test Jamaica ACH
     jm = ach.get_adapter("JMD")
     print(f"Jamaica: {jm.rail_info.name}")
     quote = jm.get_quote("JMD", "USD", 10000)
     print(f"  JMD→USD quote: {quote}")
     
-    # Test Barbados ACH
     bb = ach.get_adapter("BBD")
     print(f"\nBarbados: {bb.rail_info.name}")
     quote = bb.get_quote("BBD", "USD", 5000)
     print(f"  BBD→USD quote: {quote}")
     
-    # Test settlement
     from .base import SettlementOrder
     order = SettlementOrder(
         from_currency="BBD",

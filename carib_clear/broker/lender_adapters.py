@@ -56,6 +56,12 @@ class BaritaLenderAdapter(LenderAdapter):
     """
 
     lender_id = "barita"
+    lender_name = "Barita Capital Markets"
+    jurisdictions = ["BB"]
+    currencies = ["BBD", "USD"]
+    max_loan_usd = 100000
+    requires_collateral = False
+    lender_description = "Barbados-focused MSME lender — cash-flow based unsecured loans"
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
@@ -162,6 +168,12 @@ class JMMBLenderAdapter(LenderAdapter):
     """
 
     lender_id = "jmmb"
+    lender_name = "JMMB Group"
+    jurisdictions = ["JM", "BB"]
+    currencies = ["JMD", "BBD", "USD"]
+    max_loan_usd = 50000
+    requires_collateral = True
+    lender_description = "Jamaica/Barbados MSME lender — collateral-backed loans up to $50K"
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
@@ -277,6 +289,12 @@ class IDBInvestLenderAdapter(LenderAdapter):
     """
 
     lender_id = "idb_invest"
+    lender_name = "IDB Invest"
+    jurisdictions = ["BB", "JM", "TT", "HT", "ECCB"]
+    currencies = ["BBD", "JMD", "TTD", "XCD", "HTG", "USD"]
+    max_loan_usd = 200000
+    requires_collateral = False
+    lender_description = "IDB Invest Caribbean Green MSME — concessional rates for sustainable businesses"
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)

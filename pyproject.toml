@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
   "pydantic>=2.0",
   "requests>=2.31",
+  "httpx>=0.27",
   "pytest>=8.0",
   "fastapi>=0.100",
   "uvicorn>=0.20",
@@ -24,9 +25,20 @@ voice = [
   "kokoro>=0.9",
   "numpy>=1.24",
 ]
-all = ["carib-clear[stellar]", "carib-clear[voice]"]
+gpu = [
+  "torch>=2.4,<3",
+  "ollama>=0.4",
+  "sentence-transformers>=3.0",
+  "transformers>=4.44",
+  "accelerate>=0.33",
+  "huggingface-hub>=0.24",
+]
+all = ["carib-clear[stellar]", "carib-clear[voice]", "carib-clear[gpu]"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-v"
+markers = [
+    "integration: tests that run against live Stellar testnet (set STELLAR_INTEGRATION_TEST=1)",
+]

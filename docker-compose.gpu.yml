@@ -1,0 +1,91 @@
+# CARIB-CLEAR — H200 GPU Deployment (Buildathon Compute)
+#
+# Stands up: Ollama inference server + CARIB-CLEAR API + Dashboard
+# Uses NVIDIA H200 GPU for model inference.
+#
+# Prerequisites:
+#   - NVIDIA Container Toolkit installed on host
+#   - Buildathon H200 credentials for model access
+#
+# Start:
+#   docker compose -f docker-compose.gpu.yml build
+#   docker compose -f docker-compose.gpu.yml up -d
+#   curl http://localhost:8000/health
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: carib-clear-ollama
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_LOADED_MODELS=3
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  carib-clear:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    container_name: carib-clear-h200
+    runtime: nvidia
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - USE_GPU=1
+      - CUDA_VISIBLE_DEVICES=all
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CARIB_CLEAR_ENV=h200
+      - LOG_LEVEL=INFO
+      # Model selections for H200 deployment
+      - CREDIT_MODEL=kreyol:3b
+      - FX_MATCHING_MODEL=kreyol:3b
+      - VOICE_MODEL=kreyol:3b
+      - TTS_MODEL=kokoro
+      - ASR_MODEL=faster-whisper
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./carib_clear:/app/carib_clear
+      - ./config:/app/config
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+    command: >
+      sh -c "
+        echo '=== Waiting for Ollama...' &&
+        sleep 5 &&
+        echo '=== Running tests ===' &&
+        python3 -m pytest tests/ -q --ignore=tests/test_openrouter.py --ignore=tests/test_openrouter2.py &&
+        echo '' &&
+        echo '=== Starting CARIB-CLEAR API ===' &&
+        uvicorn carib_clear.api:app --host 0.0.0.0 --port 8000 --workers 4
+      "
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama_models:

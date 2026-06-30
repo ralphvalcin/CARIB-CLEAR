@@ -12,16 +12,16 @@ Usage:
 from __future__ import annotations
 
 import logging
-import random
+import os
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -33,18 +33,52 @@ app = FastAPI(
 )
 
 # Allow CORS for browser-based demos
+# In production, restrict to your frontend domain via CARIB_CLEAR_ALLOWED_ORIGINS
+allowed_origins = os.getenv("CARIB_CLEAR_ALLOWED_ORIGINS", "")
+origin_list = [o.strip() for o in allowed_origins.split(",") if o.strip()] if allowed_origins else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
+
+# Structured error envelope + entity headers
+from carib_clear.errors import register_error_handlers  # noqa: E402
+register_error_handlers(app)
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Attach X-Request-ID to every response for traceability."""
+    import uuid as _uuid
+    request_id = request.headers.get("X-Request-ID", str(_uuid.uuid4()))
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 # Serve static dashboard
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# Register SEP-31 compliance endpoints
+try:
+    from carib_clear.sep31 import register_with_app
+    register_with_app(app)
+    logger.info("[SEP-31] Compliance layer registered at /sep31/*")
+except Exception as exc:
+    logger.warning("[SEP-31] Could not register: %s", exc)
+
+# Register ISO 20022 endpoints
+try:
+    from carib_clear.iso20022.api import register_iso20022
+    register_iso20022(app)
+    logger.info("[ISO20022] Bank integration endpoints at /iso20022/*")
+except Exception as exc:
+    logger.warning("[ISO20022] Could not register: %s", exc)
 
 
 @app.get("/dashboard", response_class=HTMLResponse, tags=["UI"])
@@ -91,6 +125,18 @@ class DemoResponse(BaseModel):
     metrics: Dict[str, Any]
     duration_seconds: float
     html_output: str  # Pre-formatted for display
+    cost_comparison: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Cost comparison between traditional banking and CARIB-CLEAR",
+        json_schema_extra={
+            "example": {
+                "traditional_fee_usd": 4000,
+                "carib_clear_fee_usd": 50,
+                "savings_percent": 98.75,
+                "time_saved_days": 3,
+            }
+        }
+    )
 
 
 class ComplianceOnboardRequest(BaseModel):
@@ -115,6 +161,29 @@ class HealthResponse(BaseModel):
     version: str
     uptime_seconds: float
     agents_ready: bool
+    gpu_available: bool = False
+    gpu_name: str = ""
+    compute_env: str = "cpu"
+
+
+class WebhookRegisterRequest(BaseModel):
+    """Webhook registration request."""
+    url: str = Field(..., description="URL to POST events to")
+    events: List[str] = Field(default=["*"], description="Event types to receive (or ['*'] for all)")
+    participant_id: str = Field(..., description="Participant ID")
+    description: str = Field(default="", description="Human-readable description")
+    retry_count: int = Field(default=3, ge=0, le=10)
+    timeout_seconds: int = Field(default=10, ge=1, le=60)
+
+
+class WebhookResponse(BaseModel):
+    """Webhook registration response."""
+    webhook_id: str
+    url: str
+    events: List[str]
+    participant_id: str
+    secret: str
+    created_at: str
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -141,99 +210,275 @@ def _get_demo_class() -> Any:
 @app.get("/", tags=["Info"])
 @app.get("/health", response_model=HealthResponse, tags=["Info"])
 async def health():
-    """Health check endpoint."""
+    """Health check endpoint — includes GPU status for H200 deployments."""
+    from carib_clear.config.gpu import have_gpu
+
+    gpu_ok = have_gpu()
+    gpu_name = ""
+    compute_env = os.environ.get("CARIB_CLEAR_ENV", "cpu")
+    if gpu_ok:
+        try:
+            import torch
+            gpu_name = torch.cuda.get_device_name(0)
+        except Exception:
+            gpu_name = "H200 (unknown)"
+        compute_env = "h200"
+
     return HealthResponse(
         status="healthy",
         version="0.1.0-buildathon",
         uptime_seconds=round(time.time() - _start_time, 2),
         agents_ready=True,
+        gpu_available=gpu_ok,
+        gpu_name=gpu_name,
+        compute_env=compute_env,
+    )
+
+
+@app.get("/metrics", tags=["Info"])
+async def metrics():
+    """Prometheus-formatted metrics endpoint."""
+    from carib_clear.agents.liquidity_pools import LiquidityPoolManager
+    from carib_clear.webhooks import get_registry
+
+    uptime = time.time() - _start_time
+    lines = [
+        "# HELP carib_clear_uptime_seconds Uptime in seconds",
+        "# TYPE carib_clear_uptime_seconds gauge",
+        f"carib_clear_uptime_seconds {uptime:.0f}",
+        "",
+        "# HELP carib_clear_loans_total Total loan applications",
+        "# TYPE carib_clear_loans_total counter",
+        f"carib_clear_loans_total {len(_loan_history)}",
+        "",
+        "# HELP carib_clear_webhooks_total Total registered webhooks",
+        "# TYPE carib_clear_webhooks_total gauge",
+        f"carib_clear_webhooks_total {len(get_registry().list())}",
+        "",
+        "# HELP carib_clear_info Static info",
+        "# TYPE carib_clear_info gauge",
+        'carib_clear_info{version="0.1.0-buildathon"} 1',
+    ]
+
+    try:
+        lp = LiquidityPoolManager()
+        for pool_name, pool in lp._pools.items():
+            lines.append(f'carib_clear_pool_liquidity_usd{{currency="{pool_name}"}} {pool.total_liquidity_usd}')
+            lines.append(f'carib_clear_pool_providers{{currency="{pool_name}"}} {pool.provider_count}')
+    except Exception:
+        pass
+
+    return Response(
+        content="\n".join(lines) + "\n",
+        media_type="text/plain; charset=utf-8",
+        headers={"Cache-Control": "no-cache"},
     )
 
 
 @app.get("/demo/fx_swap", response_model=DemoResponse, tags=["Demo"])
 async def demo_fx_swap():
-    """Run the Layer 1 FX Swap Network demo."""
-    from io import StringIO
-    import sys
+    """Run the Layer 1 FX Swap Network demo — offloaded to thread pool."""
+    from carib_clear.engine.demo_runner import DemoRunner
 
-    demo = _get_demo_class()
-    old_stdout = sys.stdout
-    sys.stdout = buf = StringIO()
+    def _run() -> tuple:
+        """Run demo synchronously in a thread, capturing stdout."""
+        from io import StringIO
+        import sys
+        demo = _get_demo_class()
+        runner = DemoRunner()
+        old = sys.stdout
+        sys.stdout = buf = StringIO()
+        try:
+            t0 = time.time()
+            demo.run_fx_swap_demo(live=False, runner=runner)
+            dur = time.time() - t0
+            return buf.getvalue(), runner.build_result(dur)
+        finally:
+            sys.stdout = old
 
+    import asyncio
     try:
-        t0 = time.time()
-        demo.run_fx_swap_demo()
-        duration = time.time() - t0
-        output = buf.getvalue()
-    finally:
-        sys.stdout = old_stdout
+        output, result = await asyncio.to_thread(_run)
+    except Exception as exc:
+        return DemoResponse(status="error", layers=["fx_swap"], metrics={},
+                            duration_seconds=0, html_output=f"<pre>Error: {exc}</pre>")
 
     return DemoResponse(
-        status="complete",
-        layers=["fx_swap"],
-        metrics={"matches": "1", "volume": "$50,000", "participants": "4"},
-        duration_seconds=round(duration, 2),
+        status=result.status, layers=result.layers,
+        metrics=result.metrics, duration_seconds=result.duration_seconds,
+        cost_comparison=result.cost_comparison,
         html_output=f"<pre>{output[:5000]}</pre>",
     )
 
 
 @app.get("/demo/msme_credit", response_model=DemoResponse, tags=["Demo"])
 async def demo_msme_credit():
-    """Run the Layer 2 MSME Credit demo."""
-    from io import StringIO
-    import sys
+    """Run the Layer 2 MSME Credit demo — offloaded to thread pool."""
+    from carib_clear.engine.demo_runner import DemoRunner
 
-    demo = _get_demo_class()
-    old_stdout = sys.stdout
-    sys.stdout = buf = StringIO()
+    def _run() -> tuple:
+        from io import StringIO
+        import sys
+        demo = _get_demo_class()
+        runner = DemoRunner()
+        old = sys.stdout
+        sys.stdout = buf = StringIO()
+        try:
+            t0 = time.time()
+            demo.run_msme_credit_demo()
+            dur = time.time() - t0
+            return buf.getvalue(), runner.build_result(dur)
+        finally:
+            sys.stdout = old
 
-    try:
-        t0 = time.time()
-        demo.run_msme_credit_demo()
-        duration = time.time() - t0
-        output = buf.getvalue()
-    finally:
-        sys.stdout = old_stdout
+    import asyncio
+    output, result = await asyncio.to_thread(_run)
 
     return DemoResponse(
         status="complete",
         layers=["msme_credit"],
-        metrics={"applications": "2", "approved": "2", "volume": "$125,000"},
-        duration_seconds=round(duration, 2),
+        metrics=result.metrics,
+        duration_seconds=result.duration_seconds,
         html_output=f"<pre>{output[:5000]}</pre>",
     )
 
 
 @app.get("/demo/full", response_model=DemoResponse, tags=["Demo"])
 async def demo_full():
-    """Run the full pipeline (Layer 1 + Layer 2)."""
-    from io import StringIO
-    import sys
+    """Run the full pipeline (Layer 1 + Layer 2) — offloaded to thread pool."""
+    from carib_clear.engine.demo_runner import DemoRunner
 
-    demo = _get_demo_class()
-    old_stdout = sys.stdout
-    sys.stdout = buf = StringIO()
+    def _run() -> tuple:
+        from io import StringIO
+        import sys
+        demo = _get_demo_class()
+        runner = DemoRunner()
+        old = sys.stdout
+        sys.stdout = buf = StringIO()
+        try:
+            t0 = time.time()
+            demo.run_full_demo()
+            dur = time.time() - t0
+            return buf.getvalue(), runner.build_result(dur)
+        finally:
+            sys.stdout = old
 
-    try:
-        t0 = time.time()
-        demo.run_full_demo()
-        duration = time.time() - t0
-        output = buf.getvalue()
-    finally:
-        sys.stdout = old_stdout
+    import asyncio
+    output, result = await asyncio.to_thread(_run)
 
     return DemoResponse(
         status="complete",
         layers=["fx_swap", "msme_credit"],
-        metrics={
-            "matches": "1",
-            "volume_fx": "$50,000",
-            "volume_credit": "$125,000",
-            "total": "$175,000",
-        },
-        duration_seconds=round(duration, 2),
+        metrics=result.metrics,
+        duration_seconds=result.duration_seconds,
         html_output=f"<pre>{output[:8000]}</pre>",
+        cost_comparison=result.cost_comparison,
     )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Webhook Endpoints
+# ──────────────────────────────────────────────────────────────────────
+
+
+@app.post("/webhooks/register", response_model=WebhookResponse, tags=["Webhooks"])
+async def register_webhook(request: WebhookRegisterRequest):
+    """Register a webhook endpoint for event notifications."""
+    from carib_clear.webhooks import get_registry
+
+    reg = get_registry()
+    wh = reg.register(
+        url=request.url,
+        events=request.events,
+        participant_id=request.participant_id,
+        description=request.description,
+        retry_count=request.retry_count,
+        timeout_seconds=request.timeout_seconds,
+    )
+    return WebhookResponse(
+        webhook_id=wh.webhook_id,
+        url=wh.url,
+        events=wh.events,
+        participant_id=wh.participant_id,
+        secret=wh.secret,
+        created_at=wh.created_at,
+    )
+
+
+@app.get("/webhooks", tags=["Webhooks"])
+async def list_webhooks(participant_id: Optional[str] = None):
+    """List registered webhooks, optionally filtered by participant."""
+    from carib_clear.webhooks import get_registry
+
+    reg = get_registry()
+    hooks = reg.list(participant_id)
+    return {
+        "webhooks": [
+            {
+                "webhook_id": w.webhook_id,
+                "url": w.url,
+                "events": w.events,
+                "participant_id": w.participant_id,
+                "description": w.description,
+                "active": w.active,
+                "created_at": w.created_at,
+            }
+            for w in hooks
+        ],
+        "total": len(hooks),
+    }
+
+
+@app.delete("/webhooks/{webhook_id}", tags=["Webhooks"])
+async def delete_webhook(webhook_id: str):
+    """Unregister a webhook."""
+    from carib_clear.webhooks import get_registry
+
+    reg = get_registry()
+    if reg.unregister(webhook_id):
+        return {"status": "deleted", "webhook_id": webhook_id}
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Webhook not found")
+
+
+@app.get("/webhooks/{webhook_id}/deliveries", tags=["Webhooks"])
+async def webhook_deliveries(webhook_id: str, limit: int = 20):
+    """Get delivery history for a webhook."""
+    from carib_clear.webhooks import get_registry
+
+    reg = get_registry()
+    deliveries = reg.get_deliveries(webhook_id, limit=min(limit, 100))
+    return {
+        "deliveries": [
+            {
+                "delivery_id": d.delivery_id,
+                "event_type": d.event_type,
+                "status": d.status,
+                "status_code": d.status_code,
+                "attempt_number": d.attempt_number,
+                "duration_ms": d.duration_ms,
+                "timestamp": d.timestamp,
+            }
+            for d in deliveries
+        ],
+        "total": len(deliveries),
+    }
+
+
+@app.post("/webhooks/_test", tags=["Webhooks"])
+async def test_webhook_dispatch():
+    """Dispatch a test event to all registered webhooks."""
+    from carib_clear.webhooks import dispatch_event
+
+    results = dispatch_event("test.ping", {
+        "message": "CARIB-CLEAR webhook test",
+        "timestamp": __import__("time").time(),
+    })
+    return {
+        "dispatched": len(results),
+        "successful": sum(1 for r in results if r.status == "success"),
+        "failed": sum(1 for r in results if r.status == "failed"),
+    }
 
 
 @app.post("/loan/apply", response_model=LoanResponse, tags=["Lending"])
@@ -296,6 +541,24 @@ async def apply_for_loan(request: LoanRequest):
             "timestamp": time.time(),
         }
         _loan_history.append(record)
+        # Persist to SQLite
+        try:
+            from carib_clear.db import get_db
+            from datetime import datetime, timezone
+            get_db().insert("loan_applications", {
+                "application_id": app_id,
+                "business_name": request.business_name,
+                "amount_usd": float(decision.approved_amount_usd or 0),
+                "jurisdiction": request.jurisdiction,
+                "approved": 1 if decision.approved else 0,
+                "lender": (decision.lender_id or "").upper(),
+                "interest_rate_pct": float(decision.interest_rate_annual_pct or 0),
+                "sector": request.sector,
+                "purpose": request.purpose,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception:
+            pass
 
         if decision.approved:
             message = (
@@ -486,6 +749,122 @@ async def demo_trade_finance():
         "results": results,
         "stats": module.get_stats(),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Settlement Rails & Stellar Endpoints
+# ──────────────────────────────────────────────────────────────────────
+
+
+@app.get("/rails/status", tags=["Settlement"])
+async def get_rails_status():
+    """Get status and quotes from all settlement rails."""
+    from carib_clear.broker.stellar_adapter import StellarAdapter
+    from carib_clear.broker.ach_adapter import LocalACHAdapter
+    from carib_clear.broker.mobile_money_adapter import MobileMoneyAdapter
+    from carib_clear.broker.base import MultiRailRouter
+
+    router = MultiRailRouter([
+        StellarAdapter({"mock_mode": False}),
+        LocalACHAdapter({"jurisdiction": "JM", "mock_mode": True}),
+        LocalACHAdapter({"jurisdiction": "BB", "mock_mode": True}),
+        MobileMoneyAdapter({"provider": "moncash", "mock_mode": True}),
+    ])
+
+    rails = {}
+    for rail_id, broker in router.brokers.items():
+        info = broker.rail_info
+        health = broker.health_check()
+        quote = broker.get_quote("BBD", "USD", 50000)
+        rails[rail_id] = {
+            "name": info.name,
+            "healthy": health,
+            "currencies": info.supported_currencies,
+            "jurisdictions": info.jurisdictions,
+            "fee_bps": info.fee_bps,
+            "estimated_time_seconds": info.estimated_time_seconds,
+            "min_amount_usd": info.min_amount_usd,
+            "max_amount_usd": info.max_amount_usd,
+            "quote_bbd_usd": quote,
+        }
+
+    return {
+        "status": "ok",
+        "rails": rails,
+        "stellar_connected": rails.get("stellar_usdc", {}).get("healthy", False),
+    }
+
+
+@app.get("/stellar/quote", tags=["Settlement"])
+async def get_stellar_quote(
+    from_currency: str = "BBD",
+    to_currency: str = "USD",
+    amount_usd: float = 50000,
+):
+    """Get a Stellar DEX quote for a currency pair."""
+    from carib_clear.broker.stellar_adapter import StellarAdapter
+
+    adapter = StellarAdapter({"mock_mode": False})
+    adapter.initialize()
+
+    quote = adapter.get_quote(from_currency.upper(), to_currency.upper(), amount_usd)
+    if not quote:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pair {from_currency}→{to_currency} not supported",
+        )
+
+    return {
+        "from": from_currency.upper(),
+        "to": to_currency.upper(),
+        "amount_usd": amount_usd,
+        "rate": quote["rate"],
+        "fees_bps": quote["fees_bps"],
+        "estimated_time_seconds": quote["estimated_time_seconds"],
+        "path": quote["path"],
+        "mode": quote.get("mode", "estimated"),
+    }
+
+
+@app.get("/stellar/network", tags=["Settlement"])
+async def get_stellar_network_info():
+    """Get Stellar testnet network info and hub account."""
+    from stellar_sdk import Server
+    import os
+
+    horizon_url = os.getenv("STELLAR_HORIZON_URL", "https://horizon-testnet.stellar.org")
+
+    try:
+        server = Server(horizon_url)
+        root = server.root().call()
+        hub_pk = os.getenv("STELLAR_HUB_PUBLIC", "unknown")
+
+        hub_info = None
+        if hub_pk and hub_pk != "unknown":
+            try:
+                hub_account = server.accounts().account_id(hub_pk).call()
+                hub_info = {
+                    "public_key": hub_pk,
+                    "balance_xlm": float(hub_account["balances"][0]["balance"]),
+                    "sequence": hub_account["sequence"],
+                }
+            except Exception:
+                hub_info = {"public_key": hub_pk, "error": "Could not load"}
+
+        return {
+            "horizon_url": horizon_url,
+            "network_passphrase": root.get("network_passphrase", ""),
+            "core_version": root.get("core_version", ""),
+            "latest_ledger": root.get("history_latest_ledger", 0),
+            "hub_account": hub_info,
+            "connected": True,
+        }
+    except Exception as e:
+        return {
+            "horizon_url": horizon_url,
+            "connected": False,
+            "error": str(e),
+        }
 
 
 # ──────────────────────────────────────────────────────────────────────

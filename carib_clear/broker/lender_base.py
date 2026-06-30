@@ -128,11 +128,29 @@ class LenderAdapter(ABC):
 # Singleton registry of all lender adapters
 _lender_registry: Dict[str, type] = {}
 
+logger = logging.getLogger(__name__)
+
 
 def register_lender(cls: type) -> type:
-    """Decorator to register a lender adapter class."""
+    """Decorator to register a lender adapter class (legacy + plugin system)."""
     if hasattr(cls, "lender_id") and cls.lender_id:
         _lender_registry[cls.lender_id] = cls
+        # Also register with the new plugin system (lazy import to avoid cycles)
+        try:
+            from carib_clear.plugin import PluginSpec
+
+            PluginSpec.register(cls.lender_id, {
+                "type": "lender",
+                "id": cls.lender_id,
+                "name": getattr(cls, "lender_name", cls.lender_id),
+                "jurisdictions": getattr(cls, "jurisdictions", []),
+                "currencies": getattr(cls, "currencies", []),
+                "max_loan_usd": getattr(cls, "max_loan_usd", 500000),
+                "requires_collateral": getattr(cls, "requires_collateral", False),
+                "description": getattr(cls, "lender_description", f"{cls.lender_id} lender adapter"),
+            })(cls)
+        except ImportError:
+            pass
     return cls
 
 

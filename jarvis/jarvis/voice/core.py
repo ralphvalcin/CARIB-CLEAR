@@ -763,14 +763,53 @@ class VoiceLLMClient:
         return base_prompt
 
     def send(self, text: str) -> str:
-        """Send user text to LLM and return the full response."""
+        """Send user text to LLM and return the full response.
+
+        Loan-related queries (English or Kreyòl) are intercepted and
+        routed through the CARIB-CLEAR MSME Credit pipeline instead.
+        """
+        # Check for CARIB-CLEAR loan intent
+        try:
+            from jarvis.voice.carib_clear_plugin import is_loan_request, process_loan_request
+
+            if is_loan_request(text):
+                logger.info("[JARVIS] Detected loan request, routing to CARIB-CLEAR")
+                result = process_loan_request(text)
+                if result:
+                    self.conversation.add_user(text)
+                    self.conversation.add_assistant(result)
+                    return result
+        except Exception as exc:
+            logger.warning("CARIB-CLEAR plugin failed: %s", exc)
+
+        # Normal LLM flow
         self._inject_search(text)
         self.conversation.add_user(text)
         response = self.engine.chat(self.conversation)
         return response
 
     def stream_send(self, text: str):
-        """Send user text to LLM and yield response tokens as they arrive."""
+        """Send user text to LLM and yield response tokens as they arrive.
+
+        Loan-related queries are intercepted and processed through
+        CARIB-CLEAR, yielding the full response as a single token.
+        """
+        # Check for CARIB-CLEAR loan intent
+        try:
+            from jarvis.voice.carib_clear_plugin import is_loan_request, process_loan_request
+
+            if is_loan_request(text):
+                logger.info("[JARVIS] Detected loan request, routing to CARIB-CLEAR")
+                result = process_loan_request(text)
+                if result:
+                    self.conversation.add_user(text)
+                    self.conversation.add_assistant(result)
+                    yield result
+                    return
+        except Exception as exc:
+            logger.warning("CARIB-CLEAR plugin failed: %s", exc)
+
+        # Normal LLM streaming flow
         self._inject_search(text)
         self.conversation.add_user(text)
         yield from self.engine.stream_chat(self.conversation)

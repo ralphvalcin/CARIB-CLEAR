@@ -1,36 +1,31 @@
+# CARIB-CLEAR — Buildathon Demo Container
+# python -m carib_clear.demo full  (mock mode, no external dependencies)
+
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for audio processing (Kokoro/faster-whisper)
+# Install system deps for kokoro TTS / soundfile
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    ffmpeg \
     libsndfile1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy pyproject.toml first for layer caching
+# Copy dependency manifests first (layer caching)
 COPY pyproject.toml README.md ./
 
-# Install core dependencies
-RUN pip install --no-cache-dir -e . && \
-    pip install --no-cache-dir fastapi uvicorn
+# Install CARIB-CLEAR + Stellar SDK
+RUN pip install --no-cache-dir -e ".[stellar]"
 
-# Copy application code
+# Copy project source
 COPY carib_clear/ carib_clear/
-COPY config/ config/
 COPY tests/ tests/
+COPY scripts/ scripts/
+COPY secrets/ secrets/
+COPY config/ config/
 
-# Create non-root user
-RUN useradd -m -u 1000 carib && chown -R carib:carib /app
-USER carib
+# PyTest config
+COPY pyproject.toml .
 
-# Expose API port
-EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()" || exit 1
-
-# Run FastAPI server by default
-CMD ["python3", "-m", "carib_clear.api"]
+# Default: run tests then demo
+CMD ["sh", "-c", "python3 -m pytest tests/ -q --ignore=tests/test_openrouter.py --ignore=tests/test_openrouter2.py && echo '---' && python3 -m carib_clear.demo full"]

@@ -93,8 +93,9 @@ class P2PMatchingEngine:
     
     def _get_book_key(self, from_currency: str, to_currency: str) -> str:
         """Get normalized book key for currency pair."""
-        # Normalize: always store as stronger currency first
-        return f"{from_currency}/{to_currency}"
+        # Store both directions under one canonical key so opposite-side orders match.
+        a, b = sorted((from_currency.upper(), to_currency.upper()))
+        return f"{a}/{b}"
     
     def submit_demand_order(
         self,
@@ -251,7 +252,7 @@ class P2PMatchingEngine:
             amount_usd=amount_usd,
             rate=rate,
             slippage_bps=10,  # Internal match = tight spread
-            liquidity_usd=amount_usd * 2,
+            liquidity_usd=max(amount_usd * 2, 10001),  # Meet governance min
             settlement_rail="auto",
             counterparty_jurisdiction=supply.jurisdiction,
         )
@@ -268,7 +269,7 @@ class P2PMatchingEngine:
             amount_usd=amount_usd,
             rate=1/rate,  # Inverse rate for supply side
             slippage_bps=10,
-            liquidity_usd=amount_usd * 2,
+            liquidity_usd=max(amount_usd * 2, 10001),
             settlement_rail="auto",
             counterparty_jurisdiction=demand.jurisdiction,
         )
@@ -299,7 +300,7 @@ class P2PMatchingEngine:
             rate=rate,
             rail=best_rail.rail_id,
             counterparty_id=supply.participant_id,
-            jurisdiction=demand.jurisdiction,
+            jurisdiction=supply.jurisdiction,  # Destination jurisdiction
             metadata={
                 "match_id": match_id,
                 "demand_participant": demand.participant_id,

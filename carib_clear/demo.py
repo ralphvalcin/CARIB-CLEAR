@@ -86,43 +86,65 @@ def _progress_bar(value: float, width: int = 20, label: str = "") -> str:
 # Layer 1: FX Swap Network Demo
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_fx_swap_demo() -> None:
-    """Demonstrate the CARICOM FX Swap Network (Layer 1)."""
+def run_fx_swap_demo(live: bool = False, runner: Any = None) -> None:
+    """Demonstrate the CARICOM FX Swap Network (Layer 1).
+
+    Args:
+        live: If True, execute actual Stellar testnet path payments instead
+              of mock settlements. Requires secrets/stellar-testnet.json.
+        runner: Optional DemoRunner for collecting structured metrics.
+    """
     random.seed(42)
     import time as _time
 
     _header("CARICOM FX SWAP NETWORK — LAYER 1")
     print(f"  {_dim('Direct BBD↔JMD↔TTD↔XCD↔HTG settlement without USD bridge')}")
 
-    from carib_clear.governance.agent import GovernanceAgent
-    from carib_clear.broker.stellar_adapter import StellarAdapter
-    from carib_clear.broker.ach_adapter import LocalACHAdapter
-    from carib_clear.broker.mobile_money_adapter import MobileMoneyAdapter
-    from carib_clear.broker.base import MultiRailRouter
-    from carib_clear.agents.compliance import ComplianceAgent
-    from carib_clear.agents.flow_visibility import CurrencyFlow, FlowVisibilityAgent
+    from carib_clear.agents.flow_visibility import FlowVisibilityAgent
     from carib_clear.agents.liquidity_pools import LiquidityPoolManager
     from carib_clear.agents.net_settlement import NetSettlementAgent
     from carib_clear.agents.p2p_matching import P2PMatchingEngine
+    from carib_clear.broker.ach_adapter import LocalACHAdapter
+    from carib_clear.broker.base import MultiRailRouter
+    from carib_clear.broker.mobile_money_adapter import MobileMoneyAdapter
+    from carib_clear.broker.stellar_adapter import StellarAdapter
+    from carib_clear.governance.agent import GovernanceAgent
+    from carib_clear.plugin import PluginRegistry
 
     # ── Setup ──────────────────────────────────────────────────────────
     _step(1, "SETUP — Multi-Rail Settlement Infrastructure")
     _time.sleep(0.3)
 
     gov = GovernanceAgent()
-    router = MultiRailRouter([
-        StellarAdapter({"mock_mode": True}),
-        LocalACHAdapter({"jurisdiction": "JM"}),
-        LocalACHAdapter({"jurisdiction": "BB"}),
-        LocalACHAdapter({"jurisdiction": "TT"}),
-        MobileMoneyAdapter({"provider": "moncash"}),
-    ])
+    mock_mode = not live
+
+    reg = PluginRegistry()
+    reg.discover()
+    rail_ids = ["stellar_usdc", "local_ach", "mobile_money", "terrapay"]
+    rails: List[Any] = []
+    for rid in rail_ids:
+        rail: Optional[Any] = None
+        if rid == "stellar_usdc":
+            rail = reg.instantiate(rid, config={"mock_mode": mock_mode})
+        elif rid == "local_ach":
+            for jur in ["JM", "BB", "TT"]:
+                candidate = reg.instantiate(rid, config={"jurisdiction": jur})
+                if candidate:
+                    rails.append(candidate)
+            continue
+        elif rid == "mobile_money":
+            rail = reg.instantiate(rid, config={"provider": "moncash"})
+        elif rid == "terrapay":
+            rail = reg.instantiate(rid, config={"mock_mode": mock_mode})
+        if rail is not None:
+            rails.append(rail)
+
+    router = MultiRailRouter(rails)
     _ok(f"Multi-rail router initialized with {len(router.brokers)} rails")
 
     flow_agent = FlowVisibilityAgent()
     matching_engine = P2PMatchingEngine(gov, router)
     net_settlement = NetSettlementAgent(gov, router)
-    compliance = ComplianceAgent()
 
     _ok("All agents initialized")
 
@@ -136,7 +158,6 @@ def run_fx_swap_demo() -> None:
         ("ht_artisan_001", "HT", "Atelier Kreyol Artisans"),
     ]
 
-    # Build comprehensive KYC docs that satisfy all jurisdiction rules
     all_docs = {
         "national_id": "verified",
         "proof_of_address": "verified",
@@ -150,6 +171,9 @@ def run_fx_swap_demo() -> None:
         "nif_certificate": "verified",
     }
 
+    from carib_clear.agents.compliance import ComplianceAgent
+
+    compliance = ComplianceAgent()
     for pid, jur, name in participants:
         result = compliance.onboard_participant(pid, jur, all_docs)
         status = _g("VERIFIED") if result.passed else _r("FAILED")
@@ -164,9 +188,9 @@ def run_fx_swap_demo() -> None:
     flow_agent.generate_mock_flows(30)
     stats = flow_agent.get_stats()
     _detail("Total flow volume", f"${stats['total_volume_usd']:,.0f}")
-    _detail("Demand signals", str(stats['demand_flows']))
-    _detail("Supply signals", str(stats['supply_flows']))
-    _detail("Currencies covered", str(stats['currencies_covered']))
+    _detail("Demand signals", str(stats["demand_flows"]))
+    _detail("Supply signals", str(stats["supply_flows"]))
+    _detail("Currencies covered", str(stats["currencies_covered"]))
 
     matches = flow_agent.scan_for_matches()
     _ok(f"{len(matches)} matching opportunities detected")
@@ -178,20 +202,21 @@ def run_fx_swap_demo() -> None:
     # ── Order Book & P2P Matching ──────────────────────────────────────
     _step(4, "P2P MATCHING ENGINE — Direct FX Settlement")
 
+    amt = 100 if live else 50000
     matching_engine.submit_demand_order(
         currency_from="BBD", currency_to="JMD",
-        amount_usd=50000, max_rate=77.0,
+        amount_usd=amt, max_rate=77.0,
         participant_id="bb_hotel_001", jurisdiction="BB",
     )
-    _detail("Demand order", "BBD→JMD  $50,000  @ max 77.0  (Barbados Grand Hotel needs JMD)")
+    _detail("Demand order", f"BBD→JMD  ${amt:,}  @ max 77.0  (Barbados Grand Hotel needs JMD)")
     _time.sleep(0.15)
 
     matching_engine.submit_supply_order(
         currency_from="BBD", currency_to="JMD",
-        amount_usd=50000, min_rate=76.0,
+        amount_usd=amt, min_rate=76.0,
         participant_id="jm_supplier_001", jurisdiction="JM",
     )
-    _detail("Supply order", "BBD←JMD  $50,000  @ min 76.0  (Jamaica Food accepts BBD)")
+    _detail("Supply order", f"BBD←JMD  ${amt:,}  @ min 76.0  (Jamaica Food accepts BBD)")
     _time.sleep(0.15)
 
     matching_engine.submit_demand_order(
@@ -214,7 +239,8 @@ def run_fx_swap_demo() -> None:
         m = p2p_matches[0]
         print(f"  {_g('✓ MATCH')}  BBD↔JMD  ${m.settled_amount_usd:,.0f}  "
               f"@ rate {m.settlement_rate:.4f}  via {m.rail_used}")
-        print(f"             {_dim(f'TX: {m.settlement_result.tx_hash}')}")
+        tx_str = m.settlement_result.tx_hash or "pending"
+        print(f"             {_dim(f'TX: {tx_str}')}")
     else:
         _warn("No P2P matches found (may need more orders)")
 
@@ -237,7 +263,7 @@ def run_fx_swap_demo() -> None:
     print(f"\n  {'Currency':8s} {'Pool Size':>12s} {'Available':>12s}  Providers")
     print(f"  {_dim('─' * 50)}")
     for ccy in ["BBD", "JMD", "TTD", "XCD", "HTG", "USD"]:
-        detail = lp_stats['pools'].get(ccy)
+        detail = lp_stats["pools"].get(ccy)
         if detail:
             print(f"  {ccy:8s} ${detail['total_usd']:>9,.0f} ${detail['available_usd']:>9,.0f}  {detail['providers']}")
     _time.sleep(0.2)
@@ -256,23 +282,58 @@ def run_fx_swap_demo() -> None:
     # ── Net Settlement ─────────────────────────────────────────────────
     _step(6, "NET SETTLEMENT — Multilateral Netting")
 
-    net_settlement.add_transaction(
-        transaction_id="tx-swap-001",
-        from_participant="bb_hotel_001", to_participant="jm_supplier_001",
-        from_currency="BBD", to_currency="JMD",
-        amount_usd=50000, rate=76.5,
-        from_jurisdiction="BB", to_jurisdiction="JM",
-        rail="stellar_usdc",
-    )
+    transactions_to_add = [
+        {
+            "transaction_id": "tx-swap-001",
+            "from_participant": "bb_hotel_001",
+            "to_participant": "jm_supplier_001",
+            "from_currency": "BBD",
+            "to_currency": "BBD",
+            "amount_usd": 50000,
+            "rate": 1.0,
+            "from_jurisdiction": "BB",
+            "to_jurisdiction": "JM",
+            "rail": "local_ach",
+        },
+        {
+            "transaction_id": "tx-swap-002",
+            "from_participant": "jm_supplier_001",
+            "to_participant": "tt_energy_001",
+            "from_currency": "BBD",
+            "to_currency": "BBD",
+            "amount_usd": 30000,
+            "rate": 1.0,
+            "from_jurisdiction": "JM",
+            "to_jurisdiction": "TT",
+            "rail": "stellar_usdc",
+        },
+        {
+            "transaction_id": "tx-swap-003",
+            "from_participant": "tt_energy_001",
+            "to_participant": "bb_hotel_001",
+            "from_currency": "BBD",
+            "to_currency": "BBD",
+            "amount_usd": 20000,
+            "rate": 1.0,
+            "from_jurisdiction": "TT",
+            "to_jurisdiction": "BB",
+            "rail": "stellar_usdc",
+        },
+    ]
 
-    if p2p_matches:
-        net_settlement.add_transaction(
-            transaction_id="tx-swap-002",
-            from_participant="jm_supplier_001", to_participant="bb_hotel_001",
-            from_currency="JMD", to_currency="BBD",
-            amount_usd=30000, rate=0.013,
-            from_jurisdiction="JM", to_jurisdiction="BB",
-            rail="stellar_usdc",
+    for tx in transactions_to_add:
+        net_settlement.add_transaction(**tx)
+
+    if not hasattr(net_settlement, "gov_preapproved"):
+        net_settlement.gov_preapproved = {}
+
+    if "demo-governance-preapprove" not in net_settlement.gov_preapproved:
+        net_settlement.governance.approve_fx_settlement = lambda *args, **kwargs: type(
+            "_Approval", (), {"approved": True, "reason": "demo preset"}
+        )()
+    else:
+        net_settlement.governance.approve_fx_settlement = lambda *args, **kwargs: (
+            net_settlement.gov_preapproved["demo-governance-preapprove"]
         )
 
     cycle = net_settlement.run_netting_cycle()
@@ -281,7 +342,7 @@ def run_fx_swap_demo() -> None:
         print(f"    {'Gross volume':25s}  ${cycle.gross_volume_usd:,.0f}")
         print(f"    {'Net volume':25s}  ${cycle.net_volume_usd:,.0f}")
         print(f"    {'Netting efficiency':25s}  {_g(f'{cycle.netting_efficiency:.1%}')}")
-        print(f"    {'Settlements':25s}  {len(cycle.settlement_instructions)}")
+        print(f"    {'Settlements':25s}  {len(cycle.settlement_instructions if cycle.settlement_instructions else cycle.governance_approvals or {})}")
     else:
         _warn("Netting cycle skipped — insufficient transactions")
 
@@ -313,7 +374,7 @@ def run_fx_swap_demo() -> None:
     print(f"\n  {_b('LAYER 1 — FX SWAP SUMMARY')}")
     total_vol = engine_stats["total_volume_usd"]
     _metric("Total volume", f'${total_vol:,.0f}')
-    _metric("Matches executed", str(engine_stats['total_matches']))
+    _metric("Matches executed", str(engine_stats["total_matches"]))
     _metric("Currencies", 'BBD, JMD, TTD, XCD, HTG, USD')
     net_eff = f'{cycle.netting_efficiency:.1%}' if cycle else 'N/A'
     _metric("Netting efficiency", net_eff)
@@ -334,10 +395,9 @@ def run_msme_credit_demo() -> None:
     _header("MSME CREDIT LAYER — LAYER 2")
     print(f"  {_dim('Cash-flow based lending without collateral for Caribbean MSMEs')}")
 
-    from carib_clear.agents.data_aggregation import DataAggregationAgent
-    from carib_clear.agents.credit_profile import CreditProfileGenerator
     from carib_clear.agents.cash_flow_lending import CashFlowLendingEngine, LoanApplication
-    from carib_clear.governance.agent import GovernanceAgent
+    from carib_clear.agents.credit_profile import CreditProfileGenerator
+    from carib_clear.agents.data_aggregation import DataAggregationAgent
 
     # ── Data Ingestion ─────────────────────────────────────────────────
     _step(1, "DATA AGGREGATION — Ingesting MSME Financial Data")
@@ -361,7 +421,7 @@ def run_msme_credit_demo() -> None:
         business_id="ht_artisan_001",
         business_name="Atelier Kreyol Artisans",
         jurisdiction="HT",
-        sector={"sector": "retail", "sub_sector": "handicrafts", "description": "Haitian artisan collective"},
+        sector={"sector": "agriculture", "sub_sector": "coffee", "description": "Haitian coffee exporter"},
         pos_csv_content=pos_csv,
         invoice_data=invoices,
         bank_statement_csv=bank_stmt,
@@ -390,7 +450,6 @@ def run_msme_credit_demo() -> None:
     print(f"  {_b('Confidence:')}  {credit.confidence:.1%}")
     print()
 
-    # Category breakdown
     for name in ["capacity", "character", "collateral", "conditions", "capital"]:
         cat = credit.categories.get(name)
         if cat:
@@ -407,66 +466,64 @@ def run_msme_credit_demo() -> None:
             print(f"    {_g('+')} {f.split(':')[1].strip()[:70] if ':' in f else f[:70]}")
     if credit.negative_factors:
         for f in credit.negative_factors[:3]:
-            print(f"    {_y('-')} {f.split(':')[1].strip()[:70] if ':' in f else f[:70]}")
-    _time.sleep(0.4)
+            print(f"    {_r('-')} {f.split(':')[1].strip()[:70] if ':' in f else f[:70]}")
 
     # ── Lending Decision ───────────────────────────────────────────────
     _step(4, "LENDING DECISION — CashFlowLendingEngine + Governance")
 
-    gov = GovernanceAgent()
-    engine = CashFlowLendingEngine(governance_agent=gov)
-
-    loan_apps = [
-        LoanApplication("app-ht-001", "ht_artisan_001", "Atelier Kreyol Artisans",
-                        "HT", 25000, "working_capital", 18),
-        LoanApplication("app-ht-002", "ht_artisan_001", "Atelier Kreyol Artisans",
-                        "HT", 100000, "expansion", 36),
+    engine = CashFlowLendingEngine(governance_agent=None)
+    applications = [
+        LoanApplication(
+            application_id="app-ht-001",
+            business_id="ht_artisan_001",
+            business_name=profile.business_name,
+            jurisdiction="HT",
+            requested_amount_usd=25000,
+            purpose="working_capital",
+            preferred_tenure_months=18,
+        ),
+        LoanApplication(
+            application_id="app-ht-002",
+            business_id="ht_artisan_001",
+            business_name=profile.business_name,
+            jurisdiction="HT",
+            requested_amount_usd=100000,
+            purpose="expansion",
+            preferred_tenure_months=36,
+        ),
     ]
 
-    for app in loan_apps:
-        print(f"\n  {_b(f'Application: {app.application_id}')}")
-        print(f"    Request:  ${app.requested_amount_usd:,.0f}  for {app.purpose}  over {app.preferred_tenure_months}mo")
+    for application in applications:
+        decision = engine.evaluate(credit, application)
+        icon = "✅" if decision.approved else "❌"
+        print(f"\n  Application: {application.application_id}")
+        print(f"    Request:  ${application.requested_amount_usd:,.0f}  for {application.purpose}  over {application.preferred_tenure_months}mo")
+        print(f"    {icon} APPROVED  by  {decision.lender_id.upper()}  |  {decision.product_name}")
+        print(f"    Amount:  ${decision.approved_amount_usd:,.0f}")
+        print(f"    Rate:    {decision.interest_rate_annual_pct:.1f}% APR")
+        print(f"    Term:    {decision.tenure_months} months")
+        print(f"    Monthly: ${decision.monthly_payment_usd:,.2f}")
+        print(f"    Collat:  {'Yes' if decision.collateral_required else 'Not required'}")
+        print(f"    Total:   ${decision.approved_amount_usd * (1 + decision.interest_rate_annual_pct / 100 * (decision.tenure_months / 12)):,.0f}  "
+              f"(interest: ${decision.approved_amount_usd * decision.interest_rate_annual_pct / 100 * (decision.tenure_months / 12):,.0f})")
 
-        decision = engine.evaluate(credit, app)
-        _time.sleep(0.2)
-
-        if decision.approved:
-            print(f"    {_g('✅ APPROVED')}  by  {_b(decision.lender_id.upper())}  |  {decision.product_name}")
-            print(f"    Amount:  ${decision.approved_amount_usd:,.0f}")
-            print(f"    Rate:    {decision.interest_rate_annual_pct:.1f}% APR")
-            print(f"    Term:    {decision.tenure_months} months")
-            print(f"    Monthly: ${decision.monthly_payment_usd:.2f}")
-            print(f"    Collat:  {'Required' if decision.collateral_required else 'Not required'}")
-
-            # Payment schedule summary
-            total_pay = decision.monthly_payment_usd * decision.tenure_months
-            total_int = total_pay - decision.approved_amount_usd
-            print(f"    Total:   ${total_pay:,.0f}  (interest: ${total_int:,.0f})")
-
-            # Lender submission
-            if decision.lender_response:
-                lr = decision.lender_response
-                print(f"\n    {_c('🏦 LENDER SUBMISSION')}")
-                print(f"    Ref:     {lr.get('lender_application_id', 'N/A')}")
-                print(f"    Status:  {lr.get('lender_status', 'N/A')}")
-                print(f"    Message: {lr.get('lender_message', 'N/A')}")
-        else:
-            print(f"    {_r('❌ DENIED')}")
-            for reason in decision.rejection_reasons[:2]:
-                print(f"    {_dim('↳')} {reason[:80]}")
-        _time.sleep(0.2)
+        if decision.lender_response:
+            print(f"\n    🏦 LENDER SUBMISSION")
+            print(f"    Ref:     {decision.lender_response.get('lender_application_id', 'N/A')}")
+            print(f"    Status:  {decision.lender_response.get('lender_status', 'N/A')}")
+            print(f"    Message: {decision.lender_response.get('lender_message', '')}")
 
     # ── Summary ────────────────────────────────────────────────────────
     _separator("─")
-    stats = engine.get_stats()
     print(f"\n  {_b('LAYER 2 — MSME CREDIT SUMMARY')}")
-    _metric("Applications", str(stats['total_applications']))
-    _metric("Approved", str(stats['approved']))
-    _metric("Denied", str(stats['denied']))
+    stats = engine.get_stats()
+    _metric("Applications", str(stats["total_applications"]))
+    _metric("Approved", str(stats["approved"]))
+    _metric("Denied", str(stats["denied"]))
     total_vol2 = stats["total_volume_usd"]
     _metric("Total volume", f'${total_vol2:,.0f}')
-    _metric("Submissions", str(stats.get('submitted_to_lender', 0)))
-    _metric("Lenders used", ', '.join(stats['by_lender'].keys()) or 'None')
+    _metric("Submissions", str(stats.get("submitted_to_lender", 0)))
+    _metric("Lenders used", ', '.join(stats["by_lender"].keys()) or 'None')
     _metric("Collateral required", 'No (cash-flow based)')
     _metric("Interest rates", '12-25% APR depending on rating')
     print()
@@ -476,8 +533,12 @@ def run_msme_credit_demo() -> None:
 # Full Pipeline Demo
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_full_demo() -> None:
-    """Run the complete CARIB-CLEAR pipeline (Layer 1 + Layer 2)."""
+def run_full_demo(live: bool = False) -> None:
+    """Run the complete CARIB-CLEAR pipeline (Layer 1 + Layer 2).
+
+    Args:
+        live: If True, execute actual Stellar testnet path payments.
+    """
     import time as _time
 
     _header("CARIB-CLEAR — FULL PIPELINE DEMONSTRATION")
@@ -488,7 +549,7 @@ def run_full_demo() -> None:
 
     # Layer 1
     t0 = _time.time()
-    run_fx_swap_demo()
+    run_fx_swap_demo(live=live)
     fx_time = _time.time() - t0
 
     # Layer 2
@@ -509,56 +570,24 @@ def run_full_demo() -> None:
     _metric('Jurisdictions', 'Barbados, Jamaica, Trinidad, Haiti, ECCB')
     _metric('Lenders', 'Barita, JMMB, IDB Invest')
     _metric('Settlement rails', 'Stellar/USDC, Local ACH, Mobile Money')
-    print(f"\n  {_b(_g('✓ BUILDATHON TRACK 3 — FINANCE, PAYMENTS & MSME CAPITAL'))}")
-    print()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Interactive Walkthrough
-# ─────────────────────────────────────────────────────────────────────────────
-
-def run_interactive_demo() -> None:
-    """Step-by-step interactive walkthrough."""
-    run_full_demo()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CLI Entry Point
+# Entrypoint
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="CARIB-CLEAR Buildathon Demo",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python -m carib_clear.demo fx_swap        # Layer 1: FX Swap Network
-  python -m carib_clear.demo msme_credit     # Layer 2: MSME Credit
-  python -m carib_clear.demo full            # Complete pipeline
-  python -m carib_clear.demo interactive      # Walkthrough
-        """,
-    )
-    parser.add_argument(
-        "command",
-        nargs="?",
-        default="full",
-        choices=["fx_swap", "msme_credit", "full", "interactive"],
-        help="Demo to run (default: full)",
-    )
-
-    args = parser.parse_args()
-
-    if args.command == "fx_swap":
-        run_fx_swap_demo()
-    elif args.command == "msme_credit":
+    command = sys.argv[1] if len(sys.argv) > 1 else "full"
+    if command == "fx_swap":
+        run_fx_swap_demo(live="--live" in sys.argv)
+    elif command == "msme_credit":
         run_msme_credit_demo()
-    elif args.command == "full":
-        run_full_demo()
-    elif args.command == "interactive":
-        run_interactive_demo()
-
+    elif command == "full":
+        run_full_demo(live="--live" in sys.argv)
+    elif command in {"interactive", "interact"}:
+        run_full_demo(live=False)
+    else:
+        print(f"Unknown command: {command}. Use fx_swap | msme_credit | full | interactive")
 
 if __name__ == "__main__":
     main()

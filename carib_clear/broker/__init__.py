@@ -24,8 +24,9 @@ from .lender_base import (
     list_lenders,
     register_lender,
 )
-from .mobile_money_adapter import MobileMoneyAdapter, MultiProviderMobileMoney
+from .mobile_money_adapter import MobileMoneyAdapter
 from .stellar_adapter import StellarAdapter
+from .terrapay_adapter import TerraPayAdapter
 from .ach_adapter import LocalACHAdapter, MultiJurisdictionACH
 
 __all__ = [
@@ -35,10 +36,9 @@ __all__ = [
     "SettlementResult",
     "RailInfo",
     "StellarAdapter",
+    "TerraPayAdapter",
     "LocalACHAdapter",
-    "MultiJurisdictionACH",
     "MobileMoneyAdapter",
-    "MultiProviderMobileMoney",
     "LenderAdapter",
     "BaritaLenderAdapter",
     "JMMBLenderAdapter",

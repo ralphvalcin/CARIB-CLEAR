@@ -1,0 +1,59 @@
+{
+  "_description": "GPU compute configuration for H200 buildathon deployment",
+  "_docs": "Set OLLAMA_BASE_URL env var to override. USE_GPU=0 forces CPU fallback.",
+
+  "gpu_detection": {
+    "enabled": true,
+    "min_vram_gb": 40,
+    "env_var": "USE_GPU",
+    "fallback_to_cpu": true
+  },
+
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "env_override": "OLLAMA_BASE_URL",
+    "keep_alive": "24h",
+    "num_parallel": 4,
+    "max_loaded_models": 3
+  },
+
+  "models": {
+    "fx_matching": {
+      "model": "kreyol:3b",
+      "fallback": "llama3.1:8b",
+      "use_for": ["flow_routing", "match_validation"]
+    },
+    "credit_scoring": {
+      "model": "kreyol:3b",
+      "fallback": "llama3.1:8b",
+      "use_for": ["credit_profile_enrichment", "risk_narrative"]
+    },
+    "compliance": {
+      "model": "kreyol:3b",
+      "fallback": "llama3.1:8b",
+      "use_for": ["aml_screening", "sanctions_matching"]
+    },
+    "embeddings": {
+      "model": "nomic-embed-text",
+      "use_for": ["document_search", "participant_matching"]
+    }
+  },
+
+  "inference": {
+    "batch_size": 4,
+    "max_tokens": 2048,
+    "temperature": 0.1,
+    "timeout_seconds": 30
+  },
+
+  "training": {
+    "kreyol_qlora": {
+      "base_model": "meta-llama/Llama-3.1-8B-Instruct",
+      "quantization": "4bit",
+      "batch_size": 8,
+      "gradient_accumulation": 2,
+      "expected_time_hours": 6,
+      "script": "scripts/quick_train_kreyol.py"
+    }
+  }
+}

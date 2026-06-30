@@ -98,6 +98,22 @@ pytest tests/ -v
 pytest tests/test_lender_adapters.py -v
 ```
 
+## Docker
+
+```bash
+# Build the demo container
+docker compose build
+
+# Run tests + demo
+docker compose up
+
+# Run with live Stellar testnet settlement
+STELLAR_INTEGRATION_TEST=1 docker compose up
+```
+
+The Docker image runs the full test suite then executes the demo automatically.
+No external services or databases required.
+
 ## API Server
 
 ```bash
@@ -121,8 +137,48 @@ python -m carib_clear.api
 ## Docker
 
 ```bash
-docker build -t carib-clear .
-docker run -p 8000:8000 carib-clear
+# CPU/mock mode (default — no external dependencies)
+docker compose build
+docker compose up
+
+# H200 GPU mode (buildathon compute — requires NVIDIA Container Toolkit)
+docker compose -f docker-compose.gpu.yml build
+docker compose -f docker-compose.gpu.yml up
+```
+
+### GPU Deployment (H200)
+
+The `Dockerfile.gpu` + `docker-compose.gpu.yml` stack deploys on NVIDIA H200:
+
+| Component | Purpose |
+|-----------|---------|
+| **Ollama** | GPU-accelerated model serving (kreyol:3b for FX routing, credit scoring, compliance) |
+| **CARIB-CLEAR API** | FastAPI with 4 workers, auto-detects GPU |
+| **start-h200.sh** | One-command launcher: checks GPU → starts Ollama → pulls models → runs tests → launches API |
+
+```bash
+# One-command on H200:
+./scripts/start-h200.sh
+
+# Or via Docker:
+docker compose -f docker-compose.gpu.yml up
+
+# Verify GPU inference:
+curl http://localhost:8000/health  # GPU status in response
+curl http://localhost:11434/api/tags  # Loaded models
+```
+
+**Environment overrides (set at deploy time):**
+- `OLLAMA_BASE_URL` — Ollama endpoint (default: `http://localhost:11434`)
+- `CREDIT_MODEL` — Credit scoring model (default: `kreyol:3b`)
+- `FX_MATCHING_MODEL` — FX routing model (default: `kreyol:3b`)
+- `USE_GPU=0` — Force CPU fallback (e.g., local dev without GPU)
+
+## API Server
+
+```bash
+# Start the REST API
+python -m carib_clear.api
 ```
 
 ## Buildathon Context

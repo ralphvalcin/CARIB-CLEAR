@@ -315,6 +315,21 @@ class CashFlowLendingEngine:
                 application, credit_profile, gov_decision,
             )
 
+        from carib_clear.webhooks import dispatch_event
+        event_type = "loan.approved" if decision.approved else "loan.declined"
+        dispatch_event(event_type, {
+            "application_id": application.application_id,
+            "business_name": application.business_name,
+            "jurisdiction": application.jurisdiction,
+            "requested_amount_usd": application.requested_amount_usd,
+            "approved_amount_usd": decision.approved_amount_usd,
+            "interest_rate_apr_pct": decision.interest_rate_annual_pct,
+            "tenure_months": decision.tenure_months,
+            "lender_id": decision.lender_id,
+            "decision_type": decision.decision_type,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
         self.decisions.append(decision)
         return decision
 

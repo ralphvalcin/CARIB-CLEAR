@@ -1,0 +1,28 @@
+# Exclude everything by default
+*
+
+# Allow project source
+!pyproject.toml
+!README.md
+!carib_clear/
+!tests/
+!scripts/
+!config/
+!secrets/
+!Dockerfile.gpu
+!docker-compose.gpu.yml
+
+# Exclude large/unnecessary files within allowed dirs
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
+**/.git/
+
+# Exclude other projects
+jarvis/
+trading-system/
+kreyol-ai/
+
+# Exclude plan files
+plans/
+.hermes/

@@ -186,6 +186,33 @@ class NetSettlementAgent:
             result = self._execute_net_settlement(instr)
             if result.success:
                 executed.append({"instruction": instr, "result": result})
+                # Notify subscribers that settlement completed
+                from carib_clear.webhooks import dispatch_event
+                dispatch_event("settlement.completed", {
+                    "cycle_id": cycle_id,
+                    "instruction_id": instr.get("instruction_id", ""),
+                    "from_participant": instr.get("from_participant", ""),
+                    "to_participant": instr.get("to_participant", ""),
+                    "from_currency": instr.get("from_currency", ""),
+                    "to_currency": instr.get("to_currency", ""),
+                    "amount_usd": instr.get("amount_usd", 0),
+                    "rail": instr.get("recommended_rail", ""),
+                    "tx_hash": result.tx_hash or "",
+                    "status": "filled",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+            else:
+                from carib_clear.webhooks import dispatch_event
+                dispatch_event("settlement.failed", {
+                    "cycle_id": cycle_id,
+                    "instruction_id": instr.get("instruction_id", ""),
+                    "error": result.error_message or "Unknown settlement failure",
+                    "from_participant": instr.get("from_participant", ""),
+                    "to_participant": instr.get("to_participant", ""),
+                    "amount_usd": instr.get("amount_usd", 0),
+                    "rail": instr.get("recommended_rail", ""),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
         
         # Step 5: Calculate metrics
         gross_volume = sum(tx["amount_usd"] for tx in self.pending_transactions)
