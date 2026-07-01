@@ -387,3 +387,32 @@ def test_sanctions_in_transaction_screening() -> None:
     # Should flag sanctions
     issues = result.details.get("issues", [])
     assert "sanctions" in str(issues).lower() or result.requires_review is True
+
+def test_screen_transaction_aml_threshold_only_does_not_block() -> None:
+    """AML reporting-threshold breach alone requires CTR filing but must not block."""
+    agent = ComplianceAgent()
+    agent.onboard_participant(
+        "big_sender_bb", "BB",
+        {"tax_clearance_certificate": "v", "national_id": "v", "proof_of_address": "v"},
+        kyc_tier=3,
+    )
+    agent.onboard_participant(
+        "big_receiver_jm", "JM",
+        {"tax_compliance_certificate": "v", "national_id": "v", "proof_of_address": "v", "trn": "v"},
+        kyc_tier=3,
+    )
+
+    result = agent.screen_transaction(
+        transaction_id="tx-aml-only",
+        from_participant="big_sender_bb",
+        to_participant="big_receiver_jm",
+        amount_usd=150000,  # 300k BBD local > 200k BBD AML threshold; under both tier-3 limits
+        currency="BBD",
+        from_jurisdiction="BB",
+        to_jurisdiction="JM",
+        purpose="trade",
+    )
+    assert result.details["issues"] == ["aml_reporting_threshold_exceeded"]
+    assert result.passed is True
+    assert result.details["requires_ctr"] is True
+    assert result.requires_review is True  # still surfaced for CTR follow-up

@@ -100,6 +100,10 @@ JURISDICTION_RULES = {
     },
 }
 
+# Issue types that require follow-up (review, CTR filing) but must not
+# block the transaction outright.
+NON_BLOCKING_ISSUES = {"behavioral_anomaly", "aml_reporting_threshold_exceeded"}
+
 
 class ComplianceAgent:
     """
@@ -326,11 +330,11 @@ class ComplianceAgent:
                 "reason": f"Anomaly score {anomaly_score:.2f} > threshold {self.anomaly_threshold}",
             })
         
-        # Final decision — any issue means the transaction is blocked
+        # Final decision — any blocking issue means the transaction is blocked.
         # Issue types: participant_not_onboarded, kyc_not_verified,
         # aml_reporting_threshold_exceeded, tier_limit_exceeded,
         # behavioral_anomaly, sanctions_match
-        passed = len([i for i in issues if i != "behavioral_anomaly"]) == 0
+        passed = len([i for i in issues if i not in NON_BLOCKING_ISSUES]) == 0
         
         result = ComplianceCheckResult(
             check_id=f"txn-{transaction_id}-{int(time.time())}",
