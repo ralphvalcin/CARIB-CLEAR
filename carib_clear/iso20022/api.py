@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from carib_clear.auth import require_api_key
 from pydantic import BaseModel, Field
 
 from carib_clear.iso20022 import (
@@ -68,7 +70,7 @@ def register_iso20022(app) -> None:
     """
     router = APIRouter()
 
-    @router.post("/iso20022/fx", tags=["ISO 20022"])
+    @router.post("/iso20022/fx", tags=["ISO 20022"], dependencies=[Depends(require_api_key)])
     async def submit_fx_confirmation(body: Iso20022SubmitRequest):
         """Submit an ISO 20022 FX Confirmation (FXCD.001.001).
 
@@ -108,7 +110,7 @@ def register_iso20022(app) -> None:
             response_xml=response_xml,
         )
 
-    @router.post("/iso20022/payment", tags=["ISO 20022"])
+    @router.post("/iso20022/payment", tags=["ISO 20022"], dependencies=[Depends(require_api_key)])
     async def submit_payment(body: Iso20022SubmitRequest):
         """Submit an ISO 20022 Payment (pacs.008.001).
 
@@ -143,7 +145,7 @@ def register_iso20022(app) -> None:
             "usage": "POST this XML to /iso20022/fx to process",
         }
 
-    @router.post("/iso20022/settlement", tags=["ISO 20022"])
+    @router.post("/iso20022/settlement", tags=["ISO 20022"], dependencies=[Depends(require_api_key)])
     async def convert_settlement(
         from_currency: str = "BBD",
         to_currency: str = "JMD",

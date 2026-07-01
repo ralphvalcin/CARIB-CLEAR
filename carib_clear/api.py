@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -48,6 +48,8 @@ app.add_middleware(
 # Structured error envelope + entity headers
 from carib_clear.errors import register_error_handlers  # noqa: E402
 register_error_handlers(app)
+
+from carib_clear.auth import require_api_key  # noqa: E402
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
@@ -381,7 +383,7 @@ async def demo_full():
 # ──────────────────────────────────────────────────────────────────────
 
 
-@app.post("/webhooks/register", response_model=WebhookResponse, tags=["Webhooks"])
+@app.post("/webhooks/register", response_model=WebhookResponse, tags=["Webhooks"], dependencies=[Depends(require_api_key)])
 async def register_webhook(request: WebhookRegisterRequest):
     """Register a webhook endpoint for event notifications."""
     from carib_clear.webhooks import get_registry
@@ -429,7 +431,7 @@ async def list_webhooks(participant_id: Optional[str] = None):
     }
 
 
-@app.delete("/webhooks/{webhook_id}", tags=["Webhooks"])
+@app.delete("/webhooks/{webhook_id}", tags=["Webhooks"], dependencies=[Depends(require_api_key)])
 async def delete_webhook(webhook_id: str):
     """Unregister a webhook."""
     from carib_clear.webhooks import get_registry
@@ -465,7 +467,7 @@ async def webhook_deliveries(webhook_id: str, limit: int = 20):
     }
 
 
-@app.post("/webhooks/_test", tags=["Webhooks"])
+@app.post("/webhooks/_test", tags=["Webhooks"], dependencies=[Depends(require_api_key)])
 async def test_webhook_dispatch():
     """Dispatch a test event to all registered webhooks."""
     from carib_clear.webhooks import dispatch_event
@@ -481,7 +483,7 @@ async def test_webhook_dispatch():
     }
 
 
-@app.post("/loan/apply", response_model=LoanResponse, tags=["Lending"])
+@app.post("/loan/apply", response_model=LoanResponse, tags=["Lending"], dependencies=[Depends(require_api_key)])
 async def apply_for_loan(request: LoanRequest):
     """Submit a loan application through the full CARIB-CLEAR credit pipeline."""
     from carib_clear.agents.data_aggregation import DataAggregationAgent
@@ -639,7 +641,7 @@ async def get_compliance_profile(participant_id: str):
     return profile
 
 
-@app.post("/compliance/onboard", tags=["Compliance"])
+@app.post("/compliance/onboard", tags=["Compliance"], dependencies=[Depends(require_api_key)])
 async def onboard_participant(request: ComplianceOnboardRequest):
     """Onboard a new participant with KYC documents."""
     from carib_clear.agents.compliance import ComplianceAgent
@@ -658,7 +660,7 @@ async def onboard_participant(request: ComplianceOnboardRequest):
     }
 
 
-@app.post("/compliance/screen", tags=["Compliance"])
+@app.post("/compliance/screen", tags=["Compliance"], dependencies=[Depends(require_api_key)])
 async def screen_transaction(request: TransactionScreenRequest):
     """Screen a transaction for compliance."""
     from carib_clear.agents.compliance import ComplianceAgent

@@ -152,3 +152,47 @@ def test_trade_finance_demo() -> None:
     assert "results" in data
     assert "stats" in data
     assert data["stats"]["funded"] >= 0
+
+def test_loan_apply_requires_api_key_when_configured(monkeypatch) -> None:
+    """When CARIB_CLEAR_API_KEY is set, POST routes demand a matching X-API-Key."""
+    monkeypatch.setenv("CARIB_CLEAR_API_KEY", "test-secret-key")
+
+    payload = {
+        "business_name": "Auth Test Business",
+        "jurisdiction": "BB",
+        "amount_usd": 25000,
+        "sector": "retail",
+        "purpose": "working_capital",
+        "months": 18,
+    }
+
+    # No header -> 401 via the standard error envelope
+    response = client.post("/loan/apply", json=payload)
+    assert response.status_code == 401
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["error"]["code"] == "unauthorized"
+
+    # Wrong header -> 401
+    response = client.post("/loan/apply", json=payload, headers={"X-API-Key": "wrong"})
+    assert response.status_code == 401
+
+    # Correct header -> 200
+    response = client.post("/loan/apply", json=payload, headers={"X-API-Key": "test-secret-key"})
+    assert response.status_code == 200
+    assert "application_id" in response.json()
+
+
+def test_api_key_disabled_by_default(monkeypatch) -> None:
+    """With no CARIB_CLEAR_API_KEY set, requests pass through unauthenticated."""
+    monkeypatch.delenv("CARIB_CLEAR_API_KEY", raising=False)
+
+    response = client.post("/loan/apply", json={
+        "business_name": "No Auth Business",
+        "jurisdiction": "BB",
+        "amount_usd": 25000,
+        "sector": "retail",
+        "purpose": "working_capital",
+        "months": 18,
+    })
+    assert response.status_code == 200

@@ -433,7 +433,9 @@ def create_sep31_router(server: SEP31Server):
         sep31_router = create_sep31_router(server)
         app.include_router(sep31_router, prefix="/sep31")
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
+
+    from carib_clear.auth import require_api_key
 
     router = APIRouter()
 
@@ -441,7 +443,7 @@ def create_sep31_router(server: SEP31Server):
     async def sep31_info():
         return server.get_info()
 
-    @router.post("/transactions")
+    @router.post("/transactions", dependencies=[Depends(require_api_key)])
     async def sep31_create_transaction(body: SEP31TransactionRequestModel):
         tx = server.create_transaction(
             amount=body.amount,
@@ -490,7 +492,7 @@ def create_sep31_router(server: SEP31Server):
             "message": tx.message,
         }
 
-    @router.post("/customer")
+    @router.post("/customer", dependencies=[Depends(require_api_key)])
     async def sep12_register_customer(body: SEP12CustomerRequestModel):
         customer = server.register_customer(
             customer_id=body.customer_id,
@@ -527,7 +529,7 @@ def create_sep31_router(server: SEP31Server):
             "message": customer.status_message,
         }
 
-    @router.delete("/customer/{customer_id}")
+    @router.delete("/customer/{customer_id}", dependencies=[Depends(require_api_key)])
     async def sep12_delete_customer(customer_id: str):
         if server.delete_customer(customer_id):
             return {"status": "deleted"}
@@ -537,7 +539,7 @@ def create_sep31_router(server: SEP31Server):
     async def sep38_prices():
         return {"asset_pairs": server.get_prices()}
 
-    @router.post("/quote")
+    @router.post("/quote", dependencies=[Depends(require_api_key)])
     async def sep38_get_quote(body: SEP38QuoteRequestModel):
         quote = server.get_quote(
             body.sell_asset, body.buy_asset,
