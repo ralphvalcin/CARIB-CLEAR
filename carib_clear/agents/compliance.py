@@ -100,9 +100,14 @@ JURISDICTION_RULES = {
     },
 }
 
-# Issue types that require follow-up (review, CTR filing) but must not
-# block the transaction outright.
-NON_BLOCKING_ISSUES = {"behavioral_anomaly", "aml_reporting_threshold_exceeded"}
+# Issue types that require follow-up (review, CTR filing, enhanced due
+# diligence) but must not block the transaction outright. PEP involvement
+# triggers EDD under standard AML practice, not an automatic rejection.
+NON_BLOCKING_ISSUES = {
+    "behavioral_anomaly",
+    "aml_reporting_threshold_exceeded",
+    "pep_involved",
+}
 
 
 class ComplianceAgent:

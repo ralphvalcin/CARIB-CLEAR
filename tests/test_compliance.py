@@ -416,3 +416,36 @@ def test_screen_transaction_aml_threshold_only_does_not_block() -> None:
     assert result.passed is True
     assert result.details["requires_ctr"] is True
     assert result.requires_review is True  # still surfaced for CTR follow-up
+
+
+def test_screen_transaction_pep_involved_does_not_block() -> None:
+    """PEP involvement triggers enhanced due diligence (EDD) but must not
+    auto-reject an otherwise-clean transaction."""
+    agent = ComplianceAgent()
+    # Onboard a PEP sender: a beneficial owner whose name trips _screen_pep
+    agent.onboard_participant(
+        "pep_sender_bb", "BB",
+        {"tax_clearance_certificate": "v", "national_id": "v", "proof_of_address": "v"},
+        beneficial_owners=[{"name": "Minister Jane Doe"}],
+        kyc_tier=3,
+    )
+    agent.onboard_participant(
+        "clean_receiver_jm", "JM",
+        {"tax_compliance_certificate": "v", "national_id": "v", "proof_of_address": "v", "trn": "v"},
+        kyc_tier=3,
+    )
+
+    result = agent.screen_transaction(
+        transaction_id="tx-pep-only",
+        from_participant="pep_sender_bb",
+        to_participant="clean_receiver_jm",
+        amount_usd=5000,  # well under AML threshold and tier-3 limits
+        currency="BBD",
+        from_jurisdiction="BB",
+        to_jurisdiction="JM",
+        purpose="trade",
+    )
+    assert "pep_involved" in result.details["issues"]
+    assert result.passed is True
+    assert result.details["requires_edd"] is True
+    assert result.requires_review is True  # still surfaced for EDD follow-up
