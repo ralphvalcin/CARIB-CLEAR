@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+import pytest
 
 from carib_clear.api import app
 
@@ -181,6 +182,19 @@ def test_loan_apply_requires_api_key_when_configured(monkeypatch) -> None:
     response = client.post("/loan/apply", json=payload, headers={"X-API-Key": "test-secret-key"})
     assert response.status_code == 200
     assert "application_id" in response.json()
+
+
+def test_non_ascii_api_key_yields_401_not_500(monkeypatch) -> None:
+    """A non-ASCII key (headers arrive latin-1-decoded on real servers) must
+    raise a clean 401, not a TypeError from hmac.compare_digest on str."""
+    from carib_clear.auth import require_api_key
+    from carib_clear.errors import CARIBClearException
+
+    monkeypatch.setenv("CARIB_CLEAR_API_KEY", "test-secret-key")
+    with pytest.raises(CARIBClearException) as exc:
+        require_api_key(x_api_key="wröng-këy\xff")
+    assert exc.value.status_code == 401
+    assert exc.value.code == "unauthorized"
 
 
 def test_api_key_disabled_by_default(monkeypatch) -> None:

@@ -37,7 +37,9 @@ def require_api_key(x_api_key: str = Header(default="")) -> None:
             )
             _warned_disabled = True
         return
-    if not hmac.compare_digest(x_api_key, expected):
+    # Compare as bytes: hmac.compare_digest raises TypeError on non-ASCII
+    # str input, which would surface as a 500 instead of a clean 401.
+    if not hmac.compare_digest(x_api_key.encode("utf-8"), expected.encode("utf-8")):
         raise CARIBClearException(
             code="unauthorized",
             message="Missing or invalid X-API-Key header",
