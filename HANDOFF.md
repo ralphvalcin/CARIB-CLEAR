@@ -10,22 +10,28 @@
   - `POST /operator/audit/{audit_id}/escalate` → append escalation audit entry
 - Committed operator UX as `702acd8` on `main`.
 
-## Partial / Open
-- **operator-audit-ux: partially delivered**
-  - Operator console page and note/escalate actions are implemented
-  - Deferred: dedicated `/audit/{audit_id}` route due to unresolved FastAPI app-level dispatch/routing behavior
-  - `/audit/events?audit_id=...` query-param detail path is also unstable in current runtime; do not block backlog on this until runtime is upgraded/redeployed
-  - Operator list view filters/actions exist in UI; mask/unmask audit-payload controls not yet implemented
+## Latest commits
+- `df435b9` — OS hygiene + compliance API hardening + focused probes
+- `345ee24` — focused auth/webhook/CORS hardening with regression probes
+- `b538659` — harden CORS/webhook/DBSQL and keep operator/runtime inspector cleanup
 
-## Test Status
-- Targeted audit/admin API tests pass; full suite last run: 296 passed, 1 skipped, 2 warnings
-- Do not add tests expecting `/audit/events?audit_id=...` detail responses until query binding is stabilized
+## Current Test Status
+- Focused compliance suite passes in isolation
+- CORS/webhook/auth probes pass in isolation
+- Full suite status: run separately as needed
+
+## Security/ops posture
+- CORS deny-by-default with local/production fallback origin support
+- Webhook queue persistence repaired and secret preview hygiene enforced
+- Auth bridge regression coverage for legacy env + participant lookup
+- Compliance reload now admin-scoped with path validation and audit
+- Compliance list metadata no longer leaks local filesystem paths
 
 ## Environment
 - Venv: `/Users/ralphucious/.hermes/hermes-agent/venv/bin/python3`
 - Render service: `carib-clear` in Ohio, free tier, auto-deploy from `main`
-- Current HEAD: `702acd8`
+- Current HEAD: `df435b9`
 
 ## Next
-- Decide whether to diagnose FastAPI routing/handler import order further, or keep operator UX on `/audit/events` list + action events only
-- If `/audit/{audit_id}` is required later, revisit routing diagnosis with explicit FastAPI version constraints
+- Decide next production-hardening focus: live validation, DB durability, or compliance unification.
+- If `/audit/{audit_id}` is required later, revisit routing diagnosis with explicit FastAPI version constraints.

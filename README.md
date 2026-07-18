@@ -174,6 +174,24 @@ curl http://localhost:11434/api/tags  # Loaded models
 - `FX_MATCHING_MODEL` — FX routing model (default: `kreyol:3b`)
 - `USE_GPU=0` — Force CPU fallback (e.g., local dev without GPU)
 
+## Production Data Posture
+
+CARIB-CLEAR defaults to SQLite for local/test runs. Production deployments should use PostgreSQL.
+
+Required env configuration:
+- `CARIB_CLEAR_ENV=production`
+- `CARIB_CLEAR_DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<database>`
+
+Important behavior:
+- If `CARIB_CLEAR_ENV=production` and `CARIB_CLEAR_DATABASE_URL` is not set, the app will attempt to use the local SQLite default and should be treated as a deployment misconfiguration.
+- If `CARIB_CLEAR_ENV=production` and the app is forced onto SQLite, startup/schema initialization will fail fast.
+- For Render/managed Postgres, use the provider’s `DATABASE_URL` style connection string and ensure `psycopg`/`psycopg2` is installed.
+
+Durability guidance:
+- Prefer managed Postgres with automated backups and point-in-time recovery (PITR) when available.
+- Ensure schema migrations are applied before traffic is shifted to new instances.
+- Avoid running production against filesystem SQLite unless you have filesystem-level backup/replication.
+
 ## API Server
 
 ```bash

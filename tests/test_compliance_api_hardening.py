@@ -50,3 +50,5 @@ def test_compliance_reload_lists_requires_admin_and_validates_path(monkeypatch):
     assert client.post("/compliance/reload-lists").status_code in {401, 403, 404, 422}
     bad = client.post("/compliance/reload-lists", headers={"X-Admin-Token": "bad"})
     assert bad.status_code == 403
+    bad = client.post("/compliance/reload-lists", headers={"X-Admin-Token": "bad"})
+    assert bad.status_code == 403

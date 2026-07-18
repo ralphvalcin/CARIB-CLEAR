@@ -32,9 +32,20 @@ def _resolve_database_url() -> str:
     return f"sqlite:///{DEFAULT_SQLITE_PATH}"
 
 
+def _production_db_url() -> Optional[str]:
+    candidate = os.getenv("CARIB_CLEAR_DATABASE_URL", "").strip()
+    if not candidate:
+        return None
+    return candidate
+
+
 def _connection_from_url(database_url: str):
     if database_url.startswith("sqlite:///"):
         db_path = database_url[len("sqlite:///"):]
+        if os.getenv("CARIB_CLEAR_ENV", "local").lower() not in {"local", "demo", "test"}:
+            raise RuntimeError(
+                "SQLite is not allowed with CARIB_CLEAR_ENV=production; set CARIB_CLEAR_DATABASE_URL to PostgreSQL"
+            )
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
@@ -269,6 +280,10 @@ class Database:
     @property
     def _conn(self) -> sqlite3.Connection:
         """Get thread-local connection."""
+        if self.database_url.startswith("sqlite://") and os.getenv("CARIB_CLEAR_ENV", "local").lower() not in {"local", "demo", "test"}:
+            raise RuntimeError(
+                "SQLite is not allowed with CARIB_CLEAR_ENV=production; set CARIB_CLEAR_DATABASE_URL to PostgreSQL"
+            )
         if not hasattr(self._local, "conn") or self._local.conn is None:
             db_path = self.db_path or DEFAULT_SQLITE_PATH
             self._local.conn = sqlite3.connect(db_path)
