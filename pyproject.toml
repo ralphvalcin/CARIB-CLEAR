@@ -35,10 +35,10 @@ gpu = [
 ]
 all = ["carib-clear[stellar]", "carib-clear[voice]", "carib-clear[gpu]"]
 
+[tool.setuptools]
+py-modules = []
+packages = ["carib_clear"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "-v"
-markers = [
-    "integration: tests that run against live Stellar testnet (set STELLAR_INTEGRATION_TEST=1)",
-]
