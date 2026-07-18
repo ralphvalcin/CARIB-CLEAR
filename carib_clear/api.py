@@ -1263,20 +1263,20 @@ class AuditQuery(BaseModel):
 @app.get("/audit/events", tags=["Admin"], dependencies=[Depends(require_admin)])
 async def get_audit_events(
     request: Request,
-    audit_id: Optional[str] = None,
-    event: Optional[str] = None,
-    entity: Optional[str] = None,
-    actor: Optional[str] = None,
-    outcome: Optional[str] = None,
+    audit_id: Optional[str] = Query(default=None),
+    event: Optional[str] = Query(default=None),
+    entity: Optional[str] = Query(default=None),
+    actor: Optional[str] = Query(default=None),
+    outcome: Optional[str] = Query(default=None),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
-    print("DEBUG AUDIT EVENTS CALLED", dict(request.query_params), audit_id)
     """Query audit events with optional filters. Pass `audit_id` to return one record."""
     from carib_clear.audit import list_audit_trail_admin, count_audit_trail_admin, get_audit_by_id
     from carib_clear.db import get_db
 
     db = get_db()
+    audit_id = request.query_params.get("audit_id")
 
     if audit_id:
         record = get_audit_by_id(audit_id, db=db)
