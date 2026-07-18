@@ -69,6 +69,14 @@ spec:
             initialDelaySeconds: {{ .Values.worker.health.initialDelaySeconds }}
             periodSeconds: {{ .Values.worker.health.periodSeconds }}
             failureThreshold: {{ .Values.worker.health.failureThreshold }}
+      {{- if .Values.worker.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.worker.topologySpread.maxSkew }}
+          whenUnsatisfiable: {{ .Values.worker.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              app: carib-clear-worker
+      {{- end }}
       {{- with .Values.worker.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

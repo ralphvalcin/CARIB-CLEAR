@@ -10,7 +10,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: {{ include "carib-clear.api.name" . }}
-  minReplicas: {{ .Values.api.autoscaling.minReplicas }}
+  minReplicas: {{ max 2 .Values.api.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.api.autoscaling.maxReplicas }}
   metrics:
     - type: Resource
@@ -19,6 +19,14 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{ .Values.api.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if .Values.api.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.api.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 60
@@ -27,9 +35,9 @@ spec:
           value: 1
           periodSeconds: 30
     scaleDown:
-      stabilizationWindowSeconds: 300
+      stabilizationWindowSeconds: {{ .Values.api.autoscaling.scaleDownStabilizationSeconds | default 300 }}
       policies:
         - type: Percent
-          value: 10
+          value: {{ .Values.api.autoscaling.scaleDownPct | default 10 }}
           periodSeconds: 60
 {{- end }}

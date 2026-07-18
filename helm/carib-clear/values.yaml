@@ -41,9 +41,16 @@ api:
     initialDelaySeconds: 5
     periodSeconds: 10
 
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
+  # Optional production resilience controls.
+  # Disabled by default to preserve local/Minikube behavior.
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+  topologySpread:
+    enabled: false
+    maxSkew: 1
+    whenUnsatisfiable: ScheduleAnyway
 
   autoscaling:
     enabled: false
@@ -51,6 +58,12 @@ api:
     maxReplicas: 8
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 65
+    scaleDownStabilizationSeconds: 300
+    scaleDownPct: 10
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
   env:
     allowedOrigins: "http://localhost:5173,https://caribclear.app"
@@ -81,6 +94,16 @@ worker:
     initialDelaySeconds: 5
     periodSeconds: 10
     failureThreshold: 6
+
+  # Match API optional resilience knobs; can override per environment.
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+  topologySpread:
+    enabled: false
+    maxSkew: 1
+    whenUnsatisfiable: ScheduleAnyway
 
   nodeSelector: {}
   tolerations: []

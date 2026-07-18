@@ -163,3 +163,25 @@ def count_audit_trail_admin(
     except Exception as exc:  # pylint: disable=broad-except
         logger.warning("Audit count failed: %s", exc)
         return 0
+
+
+def get_audit_by_id(audit_id: str, db: Optional[Database] = None) -> Optional[Dict[str, Any]]:
+    try:
+        target = db or get_db()
+        if not hasattr(target, "query_one"):
+            return None
+        row = target.query_one("SELECT * FROM audit_trail WHERE audit_id = ?", (audit_id,))
+        if not row:
+            return None
+        row = dict(row)
+        try:
+            payload = json.loads(row.get("payload") or "{}")
+        except Exception:
+            payload = {"***": "unreadable"}
+        if _looks_like_secret(payload):
+            payload = {"***": "redacted"}
+        row["payload"] = payload
+        return row
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning("Audit detail failed: %s", exc)
+        return None

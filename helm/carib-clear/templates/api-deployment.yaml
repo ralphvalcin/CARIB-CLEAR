@@ -68,6 +68,14 @@ spec:
               port: {{ .Values.api.port }}
             initialDelaySeconds: {{ mul .Values.api.health.initialDelaySeconds 2 }}
             periodSeconds: 30
+      {{- if .Values.api.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.api.topologySpread.maxSkew }}
+          whenUnsatisfiable: {{ .Values.api.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              app: carib-clear
+      {{- end }}
       {{- with .Values.api.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

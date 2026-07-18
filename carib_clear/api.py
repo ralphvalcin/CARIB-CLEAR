@@ -1259,9 +1259,8 @@ class AuditQuery(BaseModel):
     limit: int = Field(100, ge=1, le=1000)
     offset: int = Field(0, ge=0)
 
-
 @app.get("/audit/events", tags=["Admin"], dependencies=[Depends(require_admin)])
-async def get_audit_events(request: Request, query: AuditQuery = None):
+async def get_audit_events(request: Request, query: Optional[AuditQuery] = None):
     """Query audit events with optional filters."""
     from carib_clear.audit import list_audit_trail_admin, count_audit_trail_admin
     from carib_clear.db import get_db
@@ -1295,8 +1294,6 @@ async def get_audit_events(request: Request, query: AuditQuery = None):
 @app.get("/demo/trade_finance", tags=["Demo"], dependencies=[Depends(require_api_key)])
 async def demo_trade_finance(request: Request):
     """Run the Trade Finance invoice factoring demo."""
-    require_demo_enabled(request)
-    from io import StringIO
     from io import StringIO
     import sys
     from carib_clear.agents.trade_finance import TradeFinanceModule

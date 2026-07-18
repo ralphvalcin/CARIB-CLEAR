@@ -1,32 +1,26 @@
 # CARIB-CLEAR Session Handoff
 
-## Completed
-- AML/PEP screening phase: configurable watchlists, cache, providers, engine
-- Settlement worker: lease-based claim lifecycle, compliance/KYC gate, audit emission
-- Ledger/audit trail: schema, API hooks, append-only enforcement at DB layer
-- Two review cycles produced:
-  - `ARCHITECTURE_REVIEW_AML_LEDGER.md`
-  - `REVIEW_FINDINGS_AML_LEDGER.md`
-- Production hardening fixes:
-  - DB-level audit delete guard + regression test
-  - Worker stale-claim reclamation + claim exclusion for denied/executed/failed
-  - Worker audit events for AML/KYC blocks
-  - Optional `to_participant` in `/settlements` with request-driven jurisdictions
-  - `/demo/*` gating via `X-Demo-Flag` / `CARIB_CLEAR_DEMO_ENABLED`
-  - `/compliance/onboard` and `/settlements` audit hooks
-  - audit failure now emits traceback and `audit_status=write_failed`
-  - legacy `agents/compliance.py` marked as demo/legacy
-- Full test suite: 291 passed, 1 skipped, 2 warnings
+## Completed in this session
+- Productization Phase 1-5 remediation and hardening committed as `63e2c43`
+- Helm lint passes; fixed `secret.yaml` syntax, `values.yaml` sensitive field, worker probe values wiring
+- `.env.example` expanded with production Postgres/PVC guidance and SQLite fail-fast notes
+- DB layer: thread-safe singleton with lock, `reset_db()` connection close before overwrite, `_TABLES` aligned to schema, credential log redaction
+- Phase 2: `/compliance/reload-lists` non-empty file validation + shape-consistent failure responses + dedicated tests
+- Phase 3: legacy compliance endpoints bridged to `ComplianceScreeningEngine`; `agents/compliance.py` becomes thin delegating bridge
+- Phase 4: admin audit `GET /audit/events`, write-failed regression coverage, secret-masking helpers in `audit.py`
+- Auth/routing: `/settlements` and `/demo/trade_finance` are API-key gated; demo remains behind `X-Demo-Flag`
+- Cross-cutting: centralized API version constant `DEFAULT_VERSION`; CORS helper with local-safe default origin
+- Integration test updated for auth-on-complaince-profile behavior; all targeted suites green
+
+## Test status
+- Full suite: `296 passed, 1 skipped, 2 warnings`
 
 ## Remaining
-- Helm secret template syntax + missing `CARIB_CLEAR_COMPLIANCE_LISTS` env
-- Make `audit()` tests cover the new failure-status path
-- Hardcode removal in `/compliance/screen` jurisdictions
-- Legacy vs new compliance engine unification or clearer docs
-- Multi-source registry cache semantics, if expanded
-- DB durability/managed-postgres or PVC guidance for Helm
+- Optional operator detail endpoint `/audit/{audit_id}` wiring if operator UX requires per-event inspection
+- Phase 5 production ops extras: pod disruption budget, topology spread, HPA lower-bound sanity beyond README notes
+- Live Render endpoint verification if production deployment target is needed
 
 ## Next options
-1. Finish Helm packaging health checks
-2. Add `/audit` read endpoints for operators
-3. Advance to identity/settlement/compliance/ops productization workstream
+1. Continue Phase 5 ops hardening with live cluster validation
+2. Operator/admin UX polish for audit console
+3. Advance to next productization phase or deployment runbook validation

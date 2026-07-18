@@ -1,0 +1,13 @@
+{{- if and .Values.worker.enabled .Values.worker.podDisruptionBudget.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "carib-clear.worker.name" . }}
+  labels:
+    {{- include "carib-clear.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.worker.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app: carib-clear-worker
+{{- end }}

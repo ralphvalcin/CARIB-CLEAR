@@ -41,3 +41,19 @@ Avoid `latest` and blank tags in production values.
 ### Production data posture
 Default `global.database.url` is SQLite for local/test runs.
 For production, use a managed Postgres DSN via `global.database.url` or a secret-manager-provided `database-url`; do not run SQLite as the production database path.
+
+### Optional production hardening
+All of the following are disabled by default to preserve local/Minikube behavior.
+
+- Pod disruption budget
+  - API: `.api.podDisruptionBudget.enabled`, `.api.podDisruptionBudget.minAvailable`
+  - Worker: `.worker.podDisruptionBudget.enabled`, `.worker.podDisruptionBudget.minAvailable`
+
+- Topology spread
+  - API: `.api.topologySpread.enabled`, `.api.topologySpread.maxSkew`, `.api.topologySpread.whenUnsatisfiable`
+  - Worker: `.worker.topologySpread.enabled`, `.worker.topologySpread.maxSkew`, `.worker.topologySpread.whenUnsatisfiable`
+
+- HPA guardrails
+  - `.api.autoscaling.minReplicas` is clamped to at least 2 when autoscaling is enabled
+  - `.api.autoscaling.scaleDownStabilizationSeconds` defaults to 300
+  - `.api.autoscaling.scaleDownPct` defaults to 10
