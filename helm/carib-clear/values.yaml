@@ -17,7 +17,7 @@ global:
     name: carib-clear
 
   database:
-    url: sqlite:///carib_clear.db
+    url: ""
 
 api:
   enabled: true

@@ -29,6 +29,10 @@ def _resolve_database_url() -> str:
         return env_url
     if TEST_DB_OVERRIDE is not None:
         return TEST_DB_OVERRIDE
+    if os.getenv("CARIB_CLEAR_ENV", "local").lower() not in {"local", "demo", "test"}:
+        raise RuntimeError(
+            "CARIB_CLEAR_DATABASE_URL is required in production; set it to a PostgreSQL connection string"
+        )
     return f"sqlite:///{DEFAULT_SQLITE_PATH}"
 
 

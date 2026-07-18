@@ -39,8 +39,29 @@ If you use a specific image tag per environment, set `pullPolicy: IfNotPresent`.
 Avoid `latest` and blank tags in production values.
 
 ### Production data posture
-Default `global.database.url` is SQLite for local/test runs.
-For production, use a managed Postgres DSN via `global.database.url` or a secret-manager-provided `database-url`; do not run SQLite as the production database path.
+Do not use the chart default `global.database.url` in production.
+Create a production values override file, for example `values-production.yaml`:
+
+```yaml
+global:
+  environment: production
+  database:
+    url: postgresql://<user>:<password>@<host>:<port>/<database>
+  image:
+    repository: carib-clear
+    tag: <commit-or-release-tag>
+    pullPolicy: IfNotPresent
+```
+
+Install with:
+```bash
+helm upgrade --install carib-clear ./helm/carib-clear \
+  --namespace carib-clear --create-namespace \
+  -f helm/carib-clear/values.yaml \
+  -f values-production.yaml
+```
+
+If `global.database.url` is not set and `global.environment` is `production`, Helm may still deploy with an empty secret, and the application will fail at runtime. Always override before deploying production.
 
 ### Optional production hardening
 All of the following are disabled by default to preserve local/Minikube behavior.
