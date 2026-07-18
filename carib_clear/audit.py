@@ -103,6 +103,8 @@ def list_audit_trail_admin(
     entity: Optional[str] = None,
     actor: Optional[str] = None,
     outcome: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     try:
         target = db or get_db()
@@ -120,6 +122,12 @@ def list_audit_trail_admin(
         if outcome:
             where.append("outcome = ?")
             params.append(outcome)
+        if start:
+            where.append("created_at >= ?")
+            params.append(start)
+        if end:
+            where.append("created_at <= ?")
+            params.append(end)
         params.extend([max(limit, 1), max(offset, 0)])
         sql = (
             f"SELECT * FROM audit_trail WHERE {' AND '.join(where)}"
@@ -140,6 +148,8 @@ def count_audit_trail_admin(
     entity: Optional[str] = None,
     actor: Optional[str] = None,
     outcome: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
 ) -> int:
     try:
         target = db or get_db()
@@ -157,6 +167,12 @@ def count_audit_trail_admin(
         if outcome:
             where.append("outcome = ?")
             count_params.append(outcome)
+        if start:
+            where.append("created_at >= ?")
+            count_params.append(start)
+        if end:
+            where.append("created_at <= ?")
+            count_params.append(end)
         sql = f"SELECT COUNT(*) as total FROM audit_trail WHERE {' AND '.join(where)}"
         row = target.query_one(sql, tuple(count_params))
         return int(row.get("total", 0) if isinstance(row, dict) else (row[0] if row else 0))

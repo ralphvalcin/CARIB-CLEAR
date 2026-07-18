@@ -114,6 +114,14 @@
           <label for="limit">Limit</label>
           <input id="limit" type="number" value="50" min="1" max="500" />
         </div>
+        <div class="field">
+          <label for="start">Start</label>
+          <input id="start" type="datetime-local" />
+        </div>
+        <div class="field">
+          <label for="end">End</label>
+          <input id="end" type="datetime-local" />
+        </div>
         <div class="actions">
           <button class="primary" id="refresh">Refresh</button>
           <button id="clear">Clear</button>
@@ -167,12 +175,19 @@
 
     async function load() {
       const params = new URLSearchParams();
-      ['audit_id','event','entity','actor','outcome','limit'].forEach((k) => {
+      ['audit_id','event','entity','actor','outcome','start','end','limit'].forEach((k) => {
         const el = qs(k);
-        if (el) {
-          const v = (k === 'limit') ? Math.min(500, Math.max(1, parseInt(el.value||'50', 10))) : el.value.trim();
-          if (v) params.set(k, v);
+        if (!el) return;
+        const raw = el.value || '';
+        let v = raw;
+        if (k === 'limit') v = String(Math.min(500, Math.max(1, parseInt(raw||'50', 10))));
+        if (k === 'start' || k === 'end') {
+          if (!raw) return;
+          const d = new Date(raw);
+          if (isNaN(d.getTime())) return;
+          v = d.toISOString();
         }
+        if (v || k === 'audit_id') params.set(k, v);
       });
       qs('status').textContent = 'Loading…';
       try {
@@ -258,7 +273,7 @@
 
     qs('refresh').addEventListener('click', load);
     qs('clear').addEventListener('click', () => {
-      ['audit_id','event','entity','actor','outcome'].forEach((k) => { if (qs(k)) qs(k).value = ''; });
+      ['audit_id','event','entity','actor','outcome','start','end'].forEach((k) => { if (qs(k)) qs(k).value = ''; });
       load();
     });
     qs('export').addEventListener('click', () => {

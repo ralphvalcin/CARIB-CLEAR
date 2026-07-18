@@ -1295,6 +1295,8 @@ async def get_audit_events(
     entity: Optional[str] = Query(default=None),
     actor: Optional[str] = Query(default=None),
     outcome: Optional[str] = Query(default=None),
+    start: Optional[str] = Query(default=None, description="Filter audits created after this ISO timestamp"),
+    end: Optional[str] = Query(default=None, description="Filter audits created before this ISO timestamp"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
@@ -1319,6 +1321,8 @@ async def get_audit_events(
         entity=entity,
         actor=actor,
         outcome=outcome,
+        start=start,
+        end=end,
     )
     total = count_audit_trail_admin(
         db=db,
@@ -1326,6 +1330,8 @@ async def get_audit_events(
         entity=entity,
         actor=actor,
         outcome=outcome,
+        start=start,
+        end=end,
     )
     return {
         "total": total,
