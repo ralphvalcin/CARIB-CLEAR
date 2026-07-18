@@ -42,7 +42,7 @@ spec:
                   optional: true
             {{- end }}
             {{- if .Values.api.env.webhookSecret }}
-            - name: CARIB_CLEAR_TEST_WEBHOOK_SECRET
+            - name: CARIB_CLEAR_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ template "carib-clear.name" . }}-secrets

@@ -44,16 +44,18 @@ spec:
                   name: {{ template "carib-clear.name" . }}-secrets
                   key: secret-backend
                   optional: true
-            - name: CARIB_CLEAR_TEST_WEBHOOK_SECRET
+            - name: CARIB_CLEAR_WEBHOOK_TIMEOUT_SECONDS
+              value: "{{ .Values.api.env.webhookTimeoutSeconds }}"
+            - name: CARIB_CLEAR_ENV
+              value: "{{ .Values.api.env.env }}"
+            {{- if .Values.api.env.webhookSecret }}
+            - name: CARIB_CLEAR_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ template "carib-clear.name" . }}-secrets
                   key: webhook-secret
                   optional: true
-            - name: CARIB_CLEAR_WEBHOOK_TIMEOUT_SECONDS
-              value: "{{ .Values.api.env.webhookTimeoutSeconds }}"
-            - name: CARIB_CLEAR_ENV
-              value: "{{ .Values.api.env.env }}"
+            {{- end }}
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
           readinessProbe:

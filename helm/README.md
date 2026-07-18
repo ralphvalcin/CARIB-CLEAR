@@ -9,14 +9,14 @@ helm upgrade --install carib-clear ./helm/carib-clear \
 ```
 
 ## Render-only for Render.com native Kubernetes
-If you are not using Tiller/Helm in-cluster, you can still generate pure manifests:
+Helm does not enforce successful chart rendering in-cluster. Render the manifests first and inspect the output before applying:
 
 ```bash
-helm template carib-clear ./helm/carib-clear > /tmp/carib-clear-manifests.yaml
-# then apply via kubectl or Render's Kubernetes deploy
+helm template carib-clear ./helm/carib-clear -f helm/carib-clear/values.yaml -f values-production.yaml > /tmp/carib-clear-manifests.yaml
+# review /tmp/carib-clear-manifests.yaml, then apply via kubectl or Render Kubernetes deploy
 ```
 
-## Values
+### Values
 
 ### API
 - Replicas: `.api.replicaCount`

@@ -68,7 +68,7 @@ api:
   env:
     allowedOrigins: "http://localhost:5173,https://caribclear.app"
     secretBackend: ""
-    webhookSecret: changeme-webhook-secret-rotate-for-production
+    webhookSecret: ""
     webhookTimeoutSeconds: "10"
     env: "local"
 
@@ -112,6 +112,7 @@ worker:
   env:
     env: "local"
     complianceLists: ""
+    webhookSecret: ""
 
 ingress:
   enabled: false
