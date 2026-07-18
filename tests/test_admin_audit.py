@@ -133,9 +133,9 @@ def test_admin_audit_detail_returns_record_and_masks_secret_payload(monkeypatch,
         ),
     )
 
-    from carib_clear.audit import get_audit_by_id
-
-    record = get_audit_by_id("audit-detail-1", db=get_db())
-    assert record is not None
-    assert record["audit_id"] == "audit-detail-1"
-    assert record["payload"] == {"***": "redacted"}
+    client = _make_client()
+    response = client.get("/audit/events?audit_id=audit-detail-1", headers={"X-Admin-Token": "phase4-admin-token"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["audit_id"] == "audit-detail-1"
+    assert body["payload"] == {"***": "redacted"}

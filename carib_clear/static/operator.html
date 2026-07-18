@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CARIB-CLEAR Operator Console</title>
+  <style>
+    :root {
+      --bg: #0b1d2e;
+      --panel: #0f2a44;
+      --muted: #a9b8c6;
+      --text: #e8f1f8;
+      --accent: #20c997;
+      --danger: #ff4d6d;
+      --warn: #ffd166;
+      --border: #163e5f;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg,#0e2538, #0b1d2e);
+    }
+    header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+    .pill { color: var(--muted); font-size: 12px; }
+    .layout { display: grid; grid-template-columns: 280px 1fr; gap: 0; min-height: calc(100vh - 56px); }
+    .sidebar { border-right: 1px solid var(--border); padding: 18px 16px; }
+    .filters { display:flex; flex-direction:column; gap: 10px; }
+    .field { display:flex; flex-direction:column; gap: 6px; }
+    .field label { font-size: 12px; color: var(--muted); }
+    .field input, .field select {
+      background: var(--panel); color: var(--text); border: 1px solid var(--border);
+      padding: 8px 10px; border-radius: 8px; font-size: 13px;
+    }
+    .actions { display:flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    button {
+      background: #164969; color: var(--text); border: 1px solid var(--border);
+      padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    }
+    button:hover { border-color: #2a6cb6; }
+    button.primary { background: #145c63; border-color: #239eaa; color:#dff6f8; }
+    button.accent { background: #194d3a; border-color:#20c997; color:#d8f5e9; }
+    button.danger { background:#3b1c26; border-color:#ff4d6d; color:#ffd8e0; }
+    main { padding: 18px; }
+    .toolbar {
+      display:flex; gap: 10px; align-items:center; justify-content:space-between; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;
+    }
+    .count { color: var(--muted); font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #122b40; vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    tr:hover td { background: #0d2237; cursor: pointer; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+    .tag {
+      display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid var(--border); font-size: 11px;
+    }
+    .tag.info { border-color:#239eaa; color:#b9f4f7; }
+    .tag.warn { border-color:#ffd166; color:#ffe2a0; }
+    .tag.bad { border-color:#ff4d6d; color:#ffb6c2; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .panel h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+    .detail pre {
+      background: #082133; border: 1px solid var(--border); padding: 10px; border-radius: 10px;
+      max-height: 320px; overflow: auto;
+    }
+    .actions-row { display:flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .error { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>CARIB-CLEAR Operator Console</h1>
+      <div class="pill" id="identity">Authenticated operator</div>
+    </div>
+    <div class="pill">RBAC active — admin only</div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="filters">
+        <div class="field">
+          <label for="audit_id">Audit ID</label>
+          <input id="audit_id" placeholder="exact lookup …" />
+        </div>
+        <div class="field">
+          <label for="event">Event</label>
+          <input id="event" placeholder="substring…" />
+        </div>
+        <div class="field">
+          <label for="entity">Entity</label>
+          <input id="entity" placeholder="exact" />
+        </div>
+        <div class="field">
+          <label for="actor">Actor</label>
+          <input id="actor" placeholder="substring…" />
+        </div>
+        <div class="field">
+          <label for="outcome">Outcome</label>
+          <select id="outcome">
+            <option value="">any</option>
+            <option value="success">success</option>
+            <option value="failure">failure</option>
+            <option value="write_failed">write_failed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="limit">Limit</label>
+          <input id="limit" type="number" value="50" min="1" max="500" />
+        </div>
+        <div class="actions">
+          <button class="primary" id="refresh">Refresh</button>
+          <button id="clear">Clear</button>
+        </div>
+      </div>
+    </aside>
+    <main>
+      <div class="toolbar">
+        <div class="count" id="status">Ready</div>
+        <div class="actions">
+          <button class="primary" id="export">Export JSON</button>
+        </div>
+      </div>
+
+      <div class="panel" id="list_panel">
+        <h3>Audit events</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Audit ID</th>
+              <th>Event</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>Outcome</th>
+              <th>Entity</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="events"><tr><td colspan="7" style="color:#8aa7bd">No data yet.</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="panel detail" id="detail" style="display:none; margin-top:16px;">
+        <h3>Audit detail</h3>
+        <pre id="detail_json">Click a row to inspect.</pre>
+        <div class="actions-row">
+          <button class="accent" id="note">Add note</button>
+          <button class="danger" id="escalate">Escalate</button>
+          <button id="close_detail">Close</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const base = window.location.origin;
+    const state = { selected: null, unmask: false };
+
+    function qs(id) { return document.getElementById(id); }
+    function val(id) { const el = qs(id); return el ? el.value.trim() : ''; }
+
+    async function load() {
+      const params = new URLSearchParams();
+      ['audit_id','event','entity','actor','outcome','limit'].forEach((k) => {
+        const el = qs(k);
+        if (el) {
+          const v = (k === 'limit') ? Math.min(500, Math.max(1, parseInt(el.value||'50', 10))) : el.value.trim();
+          if (v) params.set(k, v);
+        }
+      });
+      qs('status').textContent = 'Loading…';
+      try {
+        const resp = await fetch(`/audit/events?${params.toString()}`, { headers: { 'X-Admin-Token': localStorage.getItem('operator_token') || '' } });
+        if (resp.status === 401) {
+          qs('status').textContent = 'Auth failed — set token.';
+          alert('Admin token required. Use the browser devtools console to set localStorage operator_token.');
+          return;
+        } else if (resp.status === 404) {
+          qs('events').innerHTML = '<tr><td colspan="7" class="error">Not found — invalid filters or audit_id.</td></tr>';
+          qs('status').textContent = 'No results.';
+          return;
+        }
+        const data = await resp.json();
+        const rows = Array.isArray(data) ? data : (Array.isArray(data.events) ? data.events : []);
+        qs('status').textContent = `${(data.total ?? rows.length)} rows — limit ${data.limit ?? rows.length}`;
+        const tbody = qs('events');
+        if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#8aa7bd">No rows.</td></tr>'; return; }
+        tbody.innerHTML = rows.map((r,i) => {
+          const event = escapeHtml(r.event || '');
+          const actor = escapeHtml(r.actor || '');
+          const action = escapeHtml(r.action || '');
+          const outcome = escapeHtml(r.outcome || '');
+          const entity = escapeHtml(r.entity || '');
+          const created = escapeHtml(r.created_at || '');
+          const audit = escapeHtml(r.audit_id || '');
+          const outcomeClass = outcome === 'success' ? 'info' : (outcome === 'write_failed' ? 'bad' : 'warn');
+          return `<tr data-index="${i}">
+            <td class='mono'>${audit}</td>
+            <td>${event}</td>
+            <td>${actor}</td>
+            <td>${action}</td>
+            <td><span class='tag ${outcomeClass}'>${outcome || '—'}</span></td>
+            <td>${entity}</td>
+            <td>${created}</td>
+          </tr>`;
+        }).join('');
+        window.__rows = rows;
+        tbody.querySelectorAll('tr').forEach(tr => {
+          tr.addEventListener('click', () => renderDetail(rows[parseInt(tr.dataset.index,10)]));
+        });
+      } catch (err) {
+        console.error(err);
+        qs('status').textContent = 'Request error: ' + err.message;
+      }
+    }
+
+    function renderDetail(record) {
+      if (!record) return;
+      state.selected = record;
+      state.unmask = false;
+      qs('detail').style.display = 'block';
+      qs('detail_json').textContent = JSON.stringify(record, null, 2);
+    }
+
+    function escapeHtml(v) {
+      if (v == null) return '—';
+      return String(v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[ch]));
+    }
+
+    async function actionOnSelected(pathSuffix, body) {
+      if (!state.selected) { alert('Select an audit row first.'); return; }
+      if (confirm(`Confirm operator action: ${pathSuffix.split('/').pop()} on ${state.selected.audit_id}?`)) {
+        const r = await fetch(`/operator/audit/${encodeURIComponent(state.selected.audit_id)}/${pathSuffix}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type':'application/json',
+            'X-Admin-Token': localStorage.getItem('operator_token') || ''
+          },
+          body: JSON.stringify(body),
+        });
+        if (r.ok) {
+          const data = await r.json().catch(() => ({}));
+          alert('Accepted — audit written: ' + JSON.stringify(data));
+          load();
+        } else if (r.status === 401) {
+          alert('Auth failed — set localStorage operator_token for admin token.');
+        } else {
+          alert('Failed: ' + r.status);
+        }
+      }
+    }
+
+    qs('refresh').addEventListener('click', load);
+    qs('clear').addEventListener('click', () => {
+      ['audit_id','event','entity','actor','outcome'].forEach((k) => { if (qs(k)) qs(k).value = ''; });
+      load();
+    });
+    qs('export').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(window.__rows || [], null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'audit_export.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    qs('close_detail').addEventListener('click', () => { qs('detail').style.display = 'none'; state.selected = null; });
+    qs('note').addEventListener('click', () => {
+      const note = prompt('Operator note:');
+      if (note != null && note.trim()) actionOnSelected('note', { note: note.trim() });
+    });
+    qs('escalate').addEventListener('click', () => {
+      const reason = prompt('Escalation reason:');
+      if (reason != null && reason.trim()) actionOnSelected('escalate', { reason: reason.trim() });
+    });
+
+    load();
+  </script>
+</body>
+</html>

@@ -1252,6 +1252,7 @@ async def get_market_state():
 class AuditQuery(BaseModel):
     """Operator audit query."""
 
+    audit_id: Optional[str] = Field(default=None, description="Return one record by audit_id when provided")
     event: Optional[str] = Field(default=None, description="Filter by event name")
     entity: Optional[str] = Field(default=None, description="Filter by entity")
     actor: Optional[str] = Field(default=None, description="Filter by actor")
@@ -1261,12 +1262,21 @@ class AuditQuery(BaseModel):
 
 @app.get("/audit/events", tags=["Admin"], dependencies=[Depends(require_admin)])
 async def get_audit_events(request: Request, query: Optional[AuditQuery] = None):
-    """Query audit events with optional filters."""
-    from carib_clear.audit import list_audit_trail_admin, count_audit_trail_admin
+    """Query audit events with optional filters. Pass `audit_id` to return one record."""
+    from carib_clear.audit import list_audit_trail_admin, count_audit_trail_admin, get_audit_by_id
     from carib_clear.db import get_db
 
     params = query or AuditQuery()
     db = get_db()
+
+    if params.audit_id:
+        print('DEBUG AUDIT EVENTS: branch by id')
+        record = get_audit_by_id(params.audit_id, db=db)
+        print('DEBUG AUDIT EVENTS: record', record)
+        if not record:
+            raise HTTPException(status_code=404, detail="Audit record not found")
+        return record
+
     rows = list_audit_trail_admin(
         db=db,
         limit=int(params.limit),
@@ -1289,6 +1299,82 @@ async def get_audit_events(request: Request, query: Optional[AuditQuery] = None)
         "offset": int(params.offset),
         "events": rows,
     }
+
+
+class OperatorNote(BaseModel):
+    note: str = Field(min_length=1, max_length=2000)
+
+
+class OperatorEscalate(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+def _operator_identity(request: Request) -> str:
+    try:
+        identity: AuthenticatedIdentity = request.state.identity
+        if identity and identity.source != "disabled":
+            return f"operator:{identity.key_id or identity.participant_id or 'admin'}"
+    except Exception:
+        pass
+    return "operator:unknown"
+
+
+@app.post("/operator/audit/{audit_id}/note", tags=["Admin"], dependencies=[Depends(require_admin)])
+async def operator_note_audit(audit_id: str, body: OperatorNote, request: Request):
+    """Append an operator review note to an existing audit record."""
+    from carib_clear.audit import get_audit_by_id, audit as write_audit
+    from carib_clear.db import get_db
+
+    db = get_db()
+    parent = get_audit_by_id(audit_id, db=db)
+    if not parent:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+
+    record = write_audit(
+        event=f"operator.note:{parent.get('event') or 'unknown'}",
+        actor=_operator_identity(request),
+        action="note",
+        entity=parent.get("entity"),
+        entity_id=parent.get("entity_id"),
+        payload={"audit_id": audit_id, "note": body.note},
+        outcome="success",
+        db=db,
+    )
+    return {"status": "accepted", "audit": record}
+
+
+@app.post("/operator/audit/{audit_id}/escalate", tags=["Admin"], dependencies=[Depends(require_admin)])
+async def operator_escalate_audit(audit_id: str, body: OperatorEscalate, request: Request):
+    """Escalate an existing audit record and tag outcome."""
+    from carib_clear.audit import get_audit_by_id, audit as write_audit
+    from carib_clear.db import get_db
+
+    db = get_db()
+    parent = get_audit_by_id(audit_id, db=db)
+    if not parent:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+
+    record = write_audit(
+        event=f"operator.escalate:{parent.get('event') or 'unknown'}",
+        actor=_operator_identity(request),
+        action="escalate",
+        entity=parent.get("entity"),
+        entity_id=parent.get("entity_id"),
+        payload={"audit_id": audit_id, "reason": body.reason},
+        outcome="success",
+        db=db,
+    )
+    return {"status": "accepted", "audit": record}
+
+
+@app.get("/operator", tags=["Admin"], dependencies=[Depends(require_admin)])
+async def operator_console(request: Request):
+    """Return the operator audit console."""
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    static_dir = Path(__file__).parent / "static"
+    return FileResponse(str(static_dir / "operator.html"))
 
 
 @app.get("/demo/trade_finance", tags=["Demo"], dependencies=[Depends(require_api_key)])
