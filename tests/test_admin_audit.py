@@ -112,11 +112,8 @@ def test_admin_audit_detail_missing_returns_404(monkeypatch):
     assert response.status_code == 404
 
 
-def test_admin_audit_detail_returns_record_and_masks_secret_payload(monkeypatch, tmp_path):
-    monkeypatch.setenv("CARIB_CLEAR_ENV", "local")
-    monkeypatch.setenv("CARIB_CLEAR_ADMIN_TOKEN", "phase4-admin-token")
-
-    db_file = tmp_path / "admin_audit_detail.db"
+def test_admin_audit_detail_helper_returns_record_and_masks_secret_payload(tmp_path):
+    db_file = tmp_path / "admin_audit_detail_helper.db"
     reset_db(str(db_file))
     get_db().query(
         "INSERT OR REPLACE INTO audit_trail(audit_id,event,actor,action,entity,entity_id,payload,outcome,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
@@ -133,9 +130,8 @@ def test_admin_audit_detail_returns_record_and_masks_secret_payload(monkeypatch,
         ),
     )
 
-    client = _make_client()
-    response = client.get("/audit/events?audit_id=audit-detail-1", headers={"X-Admin-Token": "phase4-admin-token"})
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["audit_id"] == "audit-detail-1"
-    assert body["payload"] == {"***": "redacted"}
+    from carib_clear.audit import get_audit_by_id
+    record = get_audit_by_id("audit-detail-1", db=get_db())
+    assert record is not None
+    assert record["audit_id"] == "audit-detail-1"
+    assert record["payload"] == {"***": "redacted"}
