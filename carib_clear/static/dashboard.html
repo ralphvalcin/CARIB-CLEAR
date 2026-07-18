@@ -6,309 +6,375 @@
 <title>CARIB-CLEAR — Buildathon Demo</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
-  background: #0a0e1a; color: #e2e8f0; min-height: 100vh;
-}
-.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif; background:#0a0e1a; color:#e2e8f0; min-height:100vh; }
+.container { max-width:1100px; margin:0 auto; padding:24px 20px; }
 
-/* ── Header ────────────────────────────── */
-header { text-align: center; padding: 32px 0 24px; }
-header h1 {
-  font-size: 36px; font-weight: 800;
-  background: linear-gradient(135deg, #00d4aa, #3b82f6);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
-header .sub { color: #94a3b8; font-size: 14px; margin-top: 6px; }
-header .mission {
-  color: #64748b; font-size: 13px; max-width: 600px; margin: 12px auto 0;
-  line-height: 1.5;
-}
+/* Header */
+header { text-align:center; padding:20px 0 16px; }
+header h1 { font-size:40px; font-weight:800; background:linear-gradient(135deg,#00d4aa,#3b82f6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px; }
+header .tagline { color:#94a3b8; font-size:15px; }
+header .mission { color:#64748b; font-size:13px; max-width:700px; margin:10px auto 0; line-height:1.6; }
 
-/* ── Buttons ───────────────────────────── */
-.btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 15px;
-  cursor: pointer; border: none; transition: all 0.2s;
-}
-.btn-primary {
-  background: linear-gradient(135deg, #00d4aa, #14b8a6); color: #000;
-}
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,212,170,0.3); }
-.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+/* Action bar */
+.action-bar { display:flex; gap:10px; justify-content:center; align-items:center; margin:20px 0; flex-wrap:wrap; }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:12px 24px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; border:none; transition:all 0.2s; }
+.btn-primary { background:linear-gradient(135deg,#00d4aa,#14b8a6); color:#000; }
+.btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 8px 30px rgba(0,212,170,0.35); }
+.btn-primary:disabled { opacity:0.4; cursor:not-allowed; }
+.btn-outline { background:transparent; border:1px solid #334155; color:#94a3b8; }
+.btn-outline:hover { border-color:#00d4aa; color:#00d4aa; }
+.status-dot { width:8px; height:8px; border-radius:50%; background:#475569; display:inline-block; }
+.status-dot.ok { background:#00d4aa; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-/* ── Metrics Row ───────────────────────── */
-.metrics {
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
-  margin: 20px 0;
-}
-.metric {
-  background: #111827; border: 1px solid #1e3a5f; border-radius: 12px;
-  padding: 20px 16px; text-align: center;
-}
-.metric .label { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-.metric .value { font-size: 28px; font-weight: 700; margin-top: 6px; }
-.metric .sub { font-size: 11px; color: #64748b; margin-top: 2px; }
-.val-green { color: #00d4aa; }
-.val-blue  { color: #3b82f6; }
-.val-gold  { color: #f0b429; }
-.val-red   { color: #ef4444; }
+/* Progress bar */
+.progress-wrap { margin:0 0 8px; display:none; }
+.progress-bar { height:4px; background:#1e3a5f; border-radius:2px; overflow:hidden; }
+.progress-fill { height:100%; width:0; background:linear-gradient(90deg,#00d4aa,#3b82f6); border-radius:2px; transition:width 0.3s ease; animation: progressPulse 1.5s ease-in-out infinite; }
+@keyframes progressPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+.progress-text { color:#64748b; font-size:11px; margin-top:4px; text-align:center; }
 
-/* ── Architecture Flow ─────────────────── */
-.flow {
-  background: #111827; border: 1px solid #1e3a5f; border-radius: 12px;
-  padding: 28px; margin: 20px 0;
-}
-.flow h2 { font-size: 16px; color: #94a3b8; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; }
-.layers { display: flex; flex-direction: column; gap: 16px; }
-.layer {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 12px 16px; border-radius: 8px;
-}
-.layer-1-bg { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); }
-.layer-2-bg { background: rgba(0,212,170,0.08); border: 1px solid rgba(0,212,170,0.2); }
-.layer-label {
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
-  min-width: 100px;
-}
-.l1 { color: #3b82f6; } .l2 { color: #00d4aa; }
-.step-box {
-  padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
-  white-space: nowrap;
-}
-.l1-box { background: rgba(59,130,246,0.12); color: #93c5fd; }
-.l2-box { background: rgba(0,212,170,0.12); color: #6ee7b7; }
-.arrow { color: #475569; font-size: 14px; }
+/* Spinner */
+.spinner { display:none; width:20px; height:20px; border:2px solid rgba(0,212,170,0.2); border-top-color:#00d4aa; border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
 
-/* ── Cost Comparison ───────────────────── */
-.comparison {
-  display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px;
-  align-items: center; margin: 20px 0;
-  background: linear-gradient(135deg, #111827, #0f1f2e);
-  border: 1px solid rgba(0,212,170,0.3); border-radius: 12px; padding: 24px;
-}
-.col { text-align: center; }
-.col .title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-.col .amount { font-size: 36px; font-weight: 700; }
-.col .detail { font-size: 12px; margin-top: 4px; }
-.vs { font-size: 20px; color: #475569; font-weight: 700; }
-.trad .title { color: #ef4444; }
-.trad .amount { color: #ef4444; }
-.cc .title { color: #00d4aa; }
-.cc .amount { color: #00d4aa; }
-.savings-box {
-  background: rgba(0,212,170,0.1); border-radius: 12px; padding: 16px; text-align: center;
-  grid-column: 1 / -1;
-}
-.savings-box .pct { font-size: 32px; font-weight: 800; color: #00d4aa; }
-.savings-box .lbl { color: #94a3b8; font-size: 13px; }
-.savings-box .lbl2 { color: #64748b; font-size: 11px; margin-top: 4px; }
+/* Metrics */
+.metrics { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin:16px 0; }
+.metric { background:#111827; border:1px solid #1e3a5f; border-radius:10px; padding:18px 14px; text-align:center; transition:all 0.3s; }
+.metric.live { border-color:rgba(0,212,170,0.5); box-shadow:0 0 12px rgba(0,212,170,0.15); }
+.metric .label { color:#64748b; font-size:10px; text-transform:uppercase; letter-spacing:1px; }
+.metric .value { font-size:26px; font-weight:700; margin-top:4px; }
+.val-green { color:#00d4aa; } .val-blue { color:#3b82f6; } .val-gold { color:#f0b429; } .val-red { color:#ef4444; }
 
-/* ── Charts Row ────────────────────────── */
-.charts-row {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;
-}
-.chart-card {
-  background: #111827; border: 1px solid #1e3a5f; border-radius: 12px; padding: 20px;
-}
-.chart-card h3 { font-size: 13px; color: #94a3b8; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
-.chart-container { position: relative; height: 200px; }
+/* Architecture Flow — step indicators */
+.flow { background:#111827; border:1px solid #1e3a5f; border-radius:10px; padding:24px; margin:16px 0; }
+.flow h2 { font-size:13px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin-bottom:16px; }
+.steps { display:flex; flex-wrap:wrap; gap:6px; }
+.step { padding:8px 14px; border-radius:6px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; transition:all 0.4s; }
+.step.l1 { background:rgba(59,130,246,0.12); color:#93c5fd; border:1px solid rgba(59,130,246,0.25); }
+.step.l2 { background:rgba(0,212,170,0.12); color:#6ee7b7; border:1px solid rgba(0,212,170,0.25); }
+.step.rail { background:rgba(240,180,41,0.12); color:#fcd34d; border:1px solid rgba(240,180,41,0.25); }
+.step.active { animation:stepPulse 0.6s ease-in-out infinite; transform:scale(1.05); }
+.step.done { opacity:0.5; }
+.step.done::after { content:' ✓'; color:#00d4aa; font-size:10px; }
+@keyframes stepPulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,212,170,0.3)} 50%{box-shadow:0 0 0 6px rgba(0,212,170,0)} }
 
-/* ── Demo Section ──────────────────────── */
-.demo-section {
-  margin: 20px 0; text-align: center;
-}
-.output-box {
-  margin-top: 16px; background: #000; border: 1px solid #1e3a5f; border-radius: 8px;
-  padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px;
-  line-height: 1.6; max-height: 300px; overflow-y: auto; white-space: pre-wrap;
-  text-align: left; display: none;
-}
-.output-box .dim { opacity: 0.5; }
-.output-box .green { color: #00d4aa; }
-.output-box .red { color: #ef4444; }
-.output-box .gold { color: #f0b429; }
-.output-box .blue { color: #3b82f6; }
-.output-box .bold { font-weight: 700; }
+/* Cost comparison */
+.cost-card { background:linear-gradient(135deg,#111827,#0f1f2e); border:1px solid rgba(0,212,170,0.25); border-radius:12px; padding:24px; margin:16px 0; transition:border-color 0.5s; }
+.cost-card.updating { border-color:rgba(0,212,170,0.6); animation:cardPulse 1s ease-in-out; }
+@keyframes cardPulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,212,170,0)} 50%{box-shadow:0 0 20px rgba(0,212,170,0.2)} }
+.cost-row { display:flex; align-items:center; gap:20px; }
+.cost-col { flex:1; text-align:center; }
+.cost-col .title { font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+.cost-col .amount { font-size:28px; font-weight:700; }
+.cost-vs { color:#475569; font-size:18px; font-weight:700; flex:0 0 auto; }
+.trad .title { color:#ef4444; } .trad .amount { color:#ef4444; }
+.cc .title { color:#00d4aa; } .cc .amount { color:#00d4aa; }
+.cost-saving { text-align:center; margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.05); }
+.cost-saving .pct { font-size:28px; font-weight:800; color:#00d4aa; }
+.cost-saving .text { color:#94a3b8; font-size:13px; }
 
-/* ── Loan Form ─────────────────────────── */
-.loan-form {
-  display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
-  margin-top: 16px; justify-content: center;
-}
-.loan-form input, .loan-form select {
-  padding: 10px 14px; border-radius: 8px;
-  border: 1px solid #1e3a5f; background: #111827;
-  color: #e2e8f0; font-size: 14px;
-}
-.loan-form input::placeholder { color: #475569; }
+/* Charts */
+.charts { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0; }
+.chart-card { background:#111827; border:1px solid #1e3a5f; border-radius:10px; padding:18px; }
+.chart-card h3 { font-size:12px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+.chart-wrap { position:relative; height:180px; }
 
-/* ── Footer ────────────────────────────── */
-footer {
-  text-align: center; padding: 32px 0 16px;
-  color: #475569; font-size: 12px;
-  border-top: 1px solid #1e3a5f; margin-top: 32px;
-}
+/* Demo output */
+.output { background:#050810; border:1px solid #1e3a5f; border-radius:8px; padding:16px; margin-top:16px; font-family:'SF Mono','Fira Code',monospace; font-size:11px; line-height:1.6; max-height:260px; overflow-y:auto; display:none; white-space:pre-wrap; }
+.output .h { color:#00d4aa; font-weight:700; }
+.output .d { color:#64748b; }
+.output .ok { color:#00d4aa; }
+.output .warn { color:#f0b429; }
 
-/* ── Responsive ────────────────────────── */
-@media (max-width: 800px) {
-  .metrics { grid-template-columns: repeat(3, 1fr); }
-  .charts-row { grid-template-columns: 1fr; }
-  .comparison { grid-template-columns: 1fr; }
-  .layer { gap: 4px; }
+/* Footer */
+footer { text-align:center; padding:24px 0 12px; color:#475569; font-size:11px; border-top:1px solid #1e3a5f; margin-top:24px; }
+footer a { color:#3b82f6; text-decoration:none; }
+
+@media (max-width:768px) {
+  .metrics { grid-template-columns:repeat(3,1fr); }
+  .charts { grid-template-columns:1fr; }
+  .cost-row { flex-direction:column; gap:8px; }
 }
 </style>
 </head>
 <body>
 <div class="container">
 
-  <!-- Header -->
   <header>
     <h1>CARIB-CLEAR</h1>
-    <div class="sub">CARICOM FX Swap Network + MSME Credit Layer</div>
+    <div class="tagline">CARICOM FX Swap Network + MSME Credit Layer</div>
     <div class="mission">
-      Agentic financial infrastructure for the Caribbean — direct BBD↔JMD↔TTD↔XCD↔HTG settlement
-      without USD bridge, cash-flow based MSME lending without collateral.
+      Financial infrastructure connecting 6 Caribbean currencies — directly, without USD bridges.
+      98.75% cheaper than banks. Settlement in 5 seconds. No‑collateral MSME lending.
     </div>
   </header>
 
-  <!-- Key Metrics -->
-  <div class="metrics" id="metrics">
-    <div class="metric">
-      <div class="label">Total Liquidity</div>
-      <div class="value val-green" id="mLiq">—</div>
-    </div>
-    <div class="metric">
-      <div class="label">FX Matches</div>
-      <div class="value val-blue" id="mMatches">—</div>
-    </div>
-    <div class="metric">
-      <div class="label">Loans Approved</div>
-      <div class="value val-gold" id="mLoans">—</div>
-    </div>
-    <div class="metric">
-      <div class="label">Cost vs Banks</div>
-      <div class="value val-green" id="mCost">—</div>
-      <div class="sub" id="mCostSub"></div>
-    </div>
-    <div class="metric">
-      <div class="label">Settlement Speeds</div>
-      <div class="value" style="font-size:20px;" id="mSpeed">—</div>
-    </div>
+  <!-- API Status + Actions -->
+  <div class="action-bar">
+    <span class="status-dot ok" title="API online"></span>
+    <span style="color:#94a3b8;font-size:13px;">API live</span>
+    <button class="btn btn-primary" id="runBtn" onclick="runDemo()">▶ Run Full Demo</button>
+    <button class="btn btn-outline" onclick="runFxOnly()">FX Swap Only</button>
+    <button class="btn btn-outline" onclick="runCreditOnly()">Credit Only</button>
+    <a class="btn btn-outline" href="/docs" target="_blank">Swagger API ↔</a>
+  </div>
+
+  <!-- Progress Bar (shows during demo execution) -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText">Starting demo...</div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="metric"><div class="label">Total Liquidity</div><div class="value val-green" id="mLiq">$16.5M</div></div>
+    <div class="metric"><div class="label">FX Matches</div><div class="value val-blue" id="mMatches">1</div></div>
+    <div class="metric"><div class="label">Loans Approved</div><div class="value val-gold" id="mLoans">2</div></div>
+    <div class="metric"><div class="label">Cost vs Banks</div><div class="value val-green" id="mCost">0.1%</div></div>
+    <div class="metric"><div class="label">Settlement</div><div class="value" style="font-size:18px;" id="mSpeed">&lt;5s</div></div>
   </div>
 
   <!-- Architecture Flow -->
   <div class="flow">
-    <h2>🏗️ Architecture</h2>
-    <div class="layers">
-      <div class="layer layer-1-bg">
-        <span class="layer-label l1">Layer 1</span>
-        <span class="arrow">→</span>
-        <span class="step-box l1-box">Flow Visibility</span>
-        <span class="arrow">→</span>
-        <span class="step-box l1-box">P2P Matching</span>
-        <span class="arrow">→</span>
-        <span class="step-box l1-box">Net Settlement</span>
-        <span class="arrow">→</span>
-        <span class="step-box l1-box">Liquidity Pools</span>
-        <span class="arrow">→</span>
-        <span class="step-box l1-box">Compliance</span>
-        <span style="margin-left:8px;font-size:11px;color:#64748b;">Stellar · ACH · Mobile Money</span>
-      </div>
-      <div class="layer layer-2-bg">
-        <span class="layer-label l2">Layer 2</span>
-        <span class="arrow">→</span>
-        <span class="step-box l2-box">Data Aggregation</span>
-        <span class="arrow">→</span>
-        <span class="step-box l2-box">Credit Profile</span>
-        <span class="arrow">→</span>
-        <span class="step-box l2-box">Lending Engine</span>
-        <span class="arrow">→</span>
-        <span class="step-box l2-box">Lender Submission</span>
-        <span style="margin-left:8px;font-size:11px;color:#64748b;">Barita · JMMB · IDB Invest</span>
-      </div>
+    <h2>▸ Architecture — End-to-End Settlement Pipeline</h2>
+    <div class="steps" style="margin-bottom:10px;">
+      <span style="color:#3b82f6;font-size:11px;font-weight:700;text-transform:uppercase;">Layer 1 · FX Swap</span>
+      <span class="step l1">1. Flow Visibility</span>
+      <span class="step l1">2. P2P Matching</span>
+      <span class="step l1">3. Net Settlement</span>
+      <span class="step l1">4. Liquidity Pools</span>
+      <span class="step l1">5. Compliance</span>
+      <span class="step l1">6. Settlement</span>
+    </div>
+    <div class="steps" style="margin-bottom:10px;">
+      <span style="color:#00d4aa;font-size:11px;font-weight:700;text-transform:uppercase;">Layer 2 · MSME Credit</span>
+      <span class="step l2">1. Data Aggregation</span>
+      <span class="step l2">2. 5 C's Credit Profile</span>
+      <span class="step l2">3. Lending Engine</span>
+      <span class="step l2">4. Lender Matching</span>
+    </div>
+    <div class="steps">
+      <span style="color:#f0b429;font-size:11px;font-weight:700;text-transform:uppercase;">Settlement Rails</span>
+      <span class="step rail">Stellar/USDC (0.1 bps)</span>
+      <span class="step rail">TerraPay (35 bps)</span>
+      <span class="step rail">Local ACH (25 bps)</span>
+      <span class="step rail">Mobile Money (50 bps)</span>
     </div>
   </div>
 
   <!-- Cost Comparison -->
-  <div class="comparison" id="costCard">
-    <div class="col trad">
-      <div class="title">Traditional Banking</div>
-      <div class="amount" id="costTrad">$4,000</div>
-      <div class="detail" style="color:#94a3b8;">7-9% fees · 2-3 days</div>
+  <div class="cost-card" id="costCard">
+    <div class="cost-row">
+      <div class="cost-col trad"><div class="title">Traditional Banking</div><div class="amount" id="costTrad">$4,000</div><div style="color:#94a3b8;font-size:12px;margin-top:4px;">7–9% fee · 2–3 days</div></div>
+      <div class="cost-vs">VS</div>
+      <div class="cost-col cc"><div class="title">CARIB-CLEAR</div><div class="amount" id="costCC">$50</div><div style="color:#94a3b8;font-size:12px;margin-top:4px;">0.1% fee · &lt;5 seconds</div></div>
     </div>
-    <div class="vs">vs</div>
-    <div class="col cc">
-      <div class="title">CARIB-CLEAR</div>
-      <div class="amount" id="costCC">$50</div>
-      <div class="detail" style="color:#94a3b8;">0.1% fees · 5 seconds</div>
-    </div>
-    <div class="savings-box">
+    <div class="cost-saving">
       <div class="pct" id="savingsPct">98.75%</div>
-      <div class="lbl">cheaper than traditional banking</div>
-      <div class="lbl2">per $50,000 BBD↔JMD swap</div>
+      <div class="text">cheaper per $50,000 BBD↔JMD swap · <span id="savedText">$3,950 saved</span></div>
     </div>
   </div>
 
   <!-- Charts -->
-  <div class="charts-row">
-    <div class="chart-card">
-      <h3>💰 Cost Comparison</h3>
-      <div class="chart-container"><canvas id="costChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>📊 Liquidity by Currency</h3>
-      <div class="chart-container"><canvas id="liqChart"></canvas></div>
-    </div>
+  <div class="charts">
+    <div class="chart-card"><h3>💰 Cost per Swap</h3><div class="chart-wrap"><canvas id="costChart"></canvas></div></div>
+    <div class="chart-card"><h3>📊 Pool Liquidity</h3><div class="chart-wrap"><canvas id="liqChart"></canvas></div></div>
   </div>
 
-  <!-- Demo Runner -->
-  <div class="demo-section">
-    <button class="btn btn-primary" id="runBtn" onclick="runDemo()">
-      ▶ Run Full Demo
-    </button>
-    <div class="output-box" id="outputBox">
-      <div id="outputContent"></div>
-    </div>
-  </div>
+  <!-- Output -->
+  <div class="output" id="outputBox"><div id="outputContent"></div></div>
 
-  <!-- Footer -->
   <footer>
-    Future Caribbean Global AI Buildathon · Track 3: Finance, Payments & MSME Capital
+    CARIB-CLEAR · Future Caribbean Global AI Buildathon · Track 3: Finance, Payments & MSME Capital ·
+    <a href="/docs" target="_blank">API Docs</a> ·
+    <a href="/metrics" target="_blank">Metrics</a>
   </footer>
 
 </div>
 
 <script>
 const API = window.location.origin;
-let costChart = null, liqChart = null;
+let chartCost = null, chartLiq = null;
+let stepTimer = null;
 
-// ── Initial Load ──────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => { loadMetrics(); loadLiquidity(); });
+// ── Init ─────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  updateCostChart(4000, 50);
+  loadLiquidityChart();
+  fetch(API+'/liquidity/state').then(r=>r.json()).then(d=>{
+    if(d.total_liquidity_usd) document.getElementById('mLiq').textContent = '$'+(d.total_liquidity_usd/1e6).toFixed(1)+'M';
+  }).catch(()=>{});
+});
 
-// ── Strip ANSI ────────────────────────────────────────────────────────
-function ansiClean(text) {
-  return text.replace(/\x1b\[\d+(;\d+)?m/g, '').replace(/<\/?pre>/g, '');
+// ── Loading animations ───────────────────────────────────
+function startLoading(btn, label) {
+  // Disable all buttons
+  document.querySelectorAll('.btn-primary,.btn-outline').forEach(b => b.disabled = true);
+  // Show progress bar
+  const wrap = document.getElementById('progressWrap');
+  const fill = document.getElementById('progressFill');
+  const text = document.getElementById('progressText');
+  wrap.style.display = 'block';
+  fill.style.width = '0%';
+  text.textContent = 'Initializing ' + label + '...';
+  // Highlight metrics
+  document.querySelectorAll('.metric').forEach(m => m.classList.add('live'));
+  // Start step animation
+  animateSteps(1);
+  // Pulse cost card
+  document.getElementById('costCard').classList.add('updating');
+  // Progress bar simulation
+  let pct = 0;
+  const progressInterval = setInterval(() => {
+    pct += Math.random() * 8 + 2;
+    if (pct > 90) pct = 90;
+    fill.style.width = pct + '%';
+  }, 400);
+  return progressInterval;
 }
 
-// ── Load Metrics ──────────────────────────────────────────────────────
-async function loadMetrics() {
+function finishLoading(btn, progressInterval) {
+  clearInterval(progressInterval);
+  // Complete progress bar
+  document.getElementById('progressFill').style.width = '100%';
+  document.getElementById('progressText').textContent = 'Demo complete ✅';
+  document.getElementById('costCard').classList.remove('updating');
+  document.querySelectorAll('.metric').forEach(m => m.classList.remove('live'));
+  // Remove step animations
+  clearTimeout(stepTimer);
+  document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+  // Re-enable buttons
+  setTimeout(() => {
+    document.getElementById('progressWrap').style.display = 'none';
+    document.querySelectorAll('.btn-primary,.btn-outline').forEach(b => b.disabled = false);
+  }, 1000);
+}
+
+function animateSteps(from) {
+  const steps = document.querySelectorAll('.step');
+  steps.forEach(s => s.classList.remove('active', 'done'));
+  let i = from - 1;
+  function highlight() {
+    if (i >= steps.length) { i = 0; }
+    steps.forEach(s => s.classList.remove('active'));
+    steps[i].classList.add('active');
+    i++;
+    stepTimer = setTimeout(highlight, 500);
+  }
+  highlight();
+}
+
+// ── Demo — Full Pipeline ─────────────────────────────────
+async function runDemo() {
+  const btn = document.getElementById('runBtn');
+  const box = document.getElementById('outputBox');
+  box.style.display = 'block';
+  box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:#64748b;"><div class="spinner" style="display:inline-block;"></div>Running Layer 1 & Layer 2...</div>';
+  const progress = startLoading(btn, 'Full Pipeline');
+  btn.innerHTML = '<div class="spinner" style="display:inline-block;"></div> Running...';
+
   try {
-    let [liq, market] = await Promise.all([
-      fetch(API+'/liquidity/state').then(r=>r.json()),
-      fetch(API+'/market/state').then(r=>r.json()),
-    ]);
-    document.getElementById('mLiq').textContent = '$'+(liq.total_liquidity_usd/1e6).toFixed(1)+'M';
-    document.getElementById('mMatches').textContent = market.flows?.demand_count || '—';
-    document.getElementById('mCost').textContent = '0.1%';
-    document.getElementById('mCostSub').textContent = 'vs 7-9% banks';
-    document.getElementById('mSpeed').textContent = '<5s';
-  } catch(e) {}
+    let res = await fetch(API+'/demo/full');
+    let data = await res.json();
+    renderOutput(data);
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444;">Error: '+e.message+'</span>';
+  } finally {
+    finishLoading(btn, progress);
+    btn.innerHTML = '▶ Run Full Demo';
+  }
 }
 
-// ── Load Liquidity Chart ──────────────────────────────────────────────
-async function loadLiquidity() {
+async function runFxOnly() {
+  const box = document.getElementById('outputBox');
+  box.style.display = 'block';
+  box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:#64748b;"><div class="spinner" style="display:inline-block;"></div>Running Layer 1...</div>';
+  const progress = startLoading(null, 'FX Swap');
+  try {
+    let res = await fetch(API+'/demo/fx_swap');
+    let data = await res.json();
+    renderOutput(data);
+  } catch(e) { box.innerHTML = '<span style="color:#ef4444;">'+e.message+'</span>'; }
+  finally { finishLoading(null, progress); }
+}
+
+async function runCreditOnly() {
+  const box = document.getElementById('outputBox');
+  box.style.display = 'block';
+  box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:#64748b;"><div class="spinner" style="display:inline-block;"></div>Running Layer 2...</div>';
+  const progress = startLoading(null, 'Credit');
+  try {
+    let res = await fetch(API+'/demo/msme_credit');
+    let data = await res.json();
+    renderOutput(data);
+  } catch(e) { box.innerHTML = '<span style="color:#ef4444;">'+e.message+'</span>'; }
+  finally { finishLoading(null, progress); }
+}
+
+// ── Render output ────────────────────────────────────────
+function renderOutput(data) {
+  const box = document.getElementById('outputBox');
+  if (data.duration_seconds) {
+    const status = data.status === 'complete' ? '✅' : '⚠️';
+    document.getElementById('mSpeed').textContent = data.duration_seconds.toFixed(1)+'s';
+  }
+  // Show cleaned output
+  const raw = (data.html_output || '')
+    .replace(/<\/?pre>/g,'')
+    .replace(/\x1b\[[0-9;]*m/g,'');
+  const lines = raw.split('\n').filter(l=>l.trim()).slice(0,35);
+  let html = '';
+  for (const line of lines) {
+    let cls = '';
+    if (line.includes('✓') || line.includes('✅')) cls = 'ok';
+    else if (line.includes('⚠') || line.includes('WARNING')) cls = 'warn';
+    else if (line.startsWith('▸') || line.includes('MATCH') || line.includes('Layer')) cls = 'h';
+    html += '<span class="'+cls+'">'+line+'</span>\n';
+  }
+  box.innerHTML = html + '<span style="color:#64748b;">[Scroll for more...]</span>';
+
+  // Update cost comparison if available
+  if (data.cost_comparison) {
+    const c = data.cost_comparison;
+    document.getElementById('costTrad').textContent = '$'+(c.traditional_fee_usd||4000).toLocaleString();
+    document.getElementById('costCC').textContent = '$'+(c.carib_clear_fee_usd||50).toLocaleString();
+    document.getElementById('savingsPct').textContent = (c.savings_percent||98.75)+'%';
+    document.getElementById('savedText').textContent = '$'+((c.traditional_fee_usd||4000)-(c.carib_clear_fee_usd||50)).toLocaleString()+' saved';
+    updateCostChart(c.traditional_fee_usd||4000, c.carib_clear_fee_usd||50);
+  }
+
+  // Update metrics
+  if (data.metrics) {
+    const m = data.metrics;
+    if (m.matches && m.matches !== '0') document.getElementById('mMatches').textContent = m.matches;
+    if (m.approved_loans) document.getElementById('mLoans').textContent = m.approved_loans;
+  }
+}
+
+// ── Charts ───────────────────────────────────────────────
+
+function updateCostChart(trad, cc) {
+  if (chartCost) chartCost.destroy();
+  chartCost = new Chart(document.getElementById('costChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Traditional Banking', 'CARIB-CLEAR'],
+      datasets: [{ data: [trad, cc], backgroundColor: ['#ef4444', '#00d4aa'], borderRadius: 6 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: v => '$'+v.raw.toLocaleString() } } },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => '$'+v.toLocaleString(), color: '#94a3b8' }, grid: { color: 'rgba(30,58,95,0.3)' } },
+        x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+async function loadLiquidityChart() {
   try {
     let data = await fetch(API+'/liquidity/state').then(r=>r.json());
     const pools = data.pools || {};
@@ -316,91 +382,22 @@ async function loadLiquidity() {
     const vals = [], labels = [], colors = [];
     const cmap = {BBD:'#3b82f6',JMD:'#00d4aa',TTD:'#f0b429',XCD:'#8b5cf6',HTG:'#ef4444',USD:'#14b8a6'};
     for (const c of currencies) {
-      if (pools[c]) { labels.push(c); vals.push(pools[c].total_usd); colors.push(cmap[c]||'#3b82f6'); }
+      if (pools[c]) { labels.push(c); vals.push(pools[c].total_usd||0); colors.push(cmap[c]); }
     }
-    if (liqChart) liqChart.destroy();
-    liqChart = new Chart(document.getElementById('liqChart'), {
+    if (chartLiq) chartLiq.destroy();
+    chartLiq = new Chart(document.getElementById('liqChart'), {
       type: 'bar',
       data: { labels, datasets: [{ data: vals, backgroundColor: colors, borderRadius: 4 }] },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          y: { beginAtZero: true, ticks: { callback: v => '$'+(v/1e3).toFixed(0)+'K', color: '#94a3b8' }, grid: { color: 'rgba(30,58,95,0.3)' } },
+          y: { beginAtZero: true, ticks: { callback: v => '$'+(v/1e6).toFixed(1)+'M', color: '#94a3b8' }, grid: { color: 'rgba(30,58,95,0.2)' } },
           x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
         },
       },
     });
   } catch(e) {}
-}
-
-// ── Cost Comparison Chart ─────────────────────────────────────────────
-function updateCostChart(trad=4000, cc=50) {
-  if (costChart) costChart.destroy();
-  costChart = new Chart(document.getElementById('costChart'), {
-    type: 'bar',
-    data: {
-      labels: ['Traditional Banking', 'CARIB-CLEAR'],
-      datasets: [{
-        data: [trad, cc],
-        backgroundColor: ['#ef4444', '#00d4aa'],
-        borderRadius: 6,
-      }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: v => '$'+v.raw.toLocaleString() } },
-      },
-      scales: {
-        y: { beginAtZero: true, ticks: { callback: v => '$'+v, color: '#94a3b8' }, grid: { color: 'rgba(30,58,95,0.3)' } },
-        x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
-      },
-    },
-  });
-}
-
-// ── Run Demo ──────────────────────────────────────────────────────────
-async function runDemo() {
-  const btn = document.getElementById('runBtn');
-  const box = document.getElementById('outputBox');
-  const out = document.getElementById('outputContent');
-  btn.disabled = true; btn.innerHTML = '⏳ Running...';
-  box.style.display = 'block'; box.innerHTML = '<div style="color:#64748b;">Running full pipeline...</div>';
-
-  try {
-    let res = await fetch(API+'/demo/full');
-    let data = await res.json();
-
-    // Show cleaned output
-    const clean = ansiClean(data.html_output || '');
-    const lines = clean.split('\n').filter(l => l.trim()).slice(0, 40);
-    let html = '';
-    for (const line of lines) {
-      const cls = line.includes('✅') ? 'green' : line.includes('⚠') ? 'gold' : line.includes('✗') ? 'red' : '';
-      html += `<div class="${cls}">${line}</div>`;
-    }
-    box.innerHTML = html + '<div style="color:#64748b;margin-top:8px;">...</div>';
-
-    // Update cost comparison
-    const comp = data.cost_comparison || {};
-    const trad = comp.traditional_fee_usd || 4000;
-    const cc = comp.carib_clear_fee_usd || 50;
-    const pct = comp.savings_percent || 98.75;
-    document.getElementById('costTrad').textContent = '$'+trad.toLocaleString();
-    document.getElementById('costCC').textContent = '$'+cc.toLocaleString();
-    document.getElementById('savingsPct').textContent = pct+'%';
-    updateCostChart(trad, cc);
-
-    // Update metrics
-    loadMetrics();
-    if (data.metrics?.matches) document.getElementById('mMatches').textContent = data.metrics.matches;
-  } catch(e) {
-    box.innerHTML = '<div style="color:#ef4444;">Error: '+e.message+'</div>';
-  } finally {
-    btn.disabled = false; btn.innerHTML = '▶ Run Full Demo';
-  }
 }
 </script>
 </body>

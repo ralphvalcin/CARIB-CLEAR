@@ -1,0 +1,37 @@
+version: "3.9"
+services:
+  api:
+    build: .
+    command: python -m carib_clear.api
+    ports: ["8000:8000"]
+    env_file: .env
+    depends_on:
+      - db
+    volumes:
+      - ./carib_clear:/app/carib_clear
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: carib_clear
+      POSTGRES_USER: carib
+      POSTGRES_PASSWORD: carib_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+
+  worker:
+    build: .
+    command: python -m carib_clear.worker
+    env_file: .env
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  pgdata:
+  redisdata:

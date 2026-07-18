@@ -126,9 +126,9 @@ class MobileMoneyAdapter(MultiRailBroker):
     
     def health_check(self) -> bool:
         """Check provider health."""
-        if self.config.get("mock_mode", True):
-            return True
-        return self._initialized and random.random() > self.mock_failure_rate
+        if random.random() < self.mock_failure_rate:
+            return False
+        return True
     
     def get_quote(
         self,

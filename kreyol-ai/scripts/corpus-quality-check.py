@@ -128,7 +128,7 @@ def analyze_corpus(path: str) -> dict:
         source_lens[source].append(text_len)
 
         # Hash dedup
-        h = hashlib.md5(text.encode()).hexdigest()
+        h = hashlib.sha256(text.encode()).hexdigest()
         hashes[h] += 1
 
         # Quality checks
@@ -168,7 +168,7 @@ def analyze_corpus(path: str) -> dict:
     dup_chars = 0
     for rec in records:
         text = rec.get("text", "")
-        h = hashlib.md5(text.encode()).hexdigest()
+        h = hashlib.sha256(text.encode()).hexdigest()
         if h in dup_texts:
             dupes += 1
             dup_chars += len(text)
@@ -319,7 +319,7 @@ def clean_corpus(input_path: str, output_path: str) -> int:
             if ratios["letter_ratio"] < MIN_LETTER_RATIO:
                 skipped["low_letter_ratio"] += 1
                 continue
-            h = hashlib.md5(text.encode()).hexdigest()
+            h = hashlib.sha256(text.encode()).hexdigest()
             if h in seen_hashes:
                 skipped["duplicate"] += 1
                 continue

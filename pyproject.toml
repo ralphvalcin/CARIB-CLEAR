@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carib-clear"
-version = "0.1.0-buildathon"
+version = "0.1.0+buildathon"
 description = "CARICOM FX Swap Network + MSME Credit Layer — Agentic financial infrastructure for the Caribbean"
 requires-python = ">=3.10"
 dependencies = [

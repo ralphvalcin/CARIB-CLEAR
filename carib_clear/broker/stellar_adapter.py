@@ -95,6 +95,7 @@ class StellarAdapter(MultiRailBroker):
         self.mock_mode = config_src.get("mock_mode", True)
         self._participants: Dict[str, str] = {}  # name -> public_key
         self._secrets: Dict[str, str] = {}  # name -> secret_key
+        self._submitted_ids: Dict[str, Dict[str, Any]] = {}
 
         # Load participant accounts for live mode
         if not self.mock_mode:
@@ -292,6 +293,9 @@ class StellarAdapter(MultiRailBroker):
     def submit_settlement(self, order: SettlementOrder) -> SettlementResult:
         """Execute settlement on Stellar network."""
         start_time = time.time()
+        prior = self._check_prior_settlement(order.order_id)
+        if prior is not None:
+            return prior
         
         if self.mock_mode:
             return self._mock_settlement(order, start_time)
@@ -364,7 +368,7 @@ class StellarAdapter(MultiRailBroker):
             elapsed = time.time() - start_time
             
             if response["successful"]:
-                return SettlementResult(
+                result = SettlementResult(
                     order_id=order.order_id,
                     success=True,
                     fill_price=order.rate,
@@ -376,25 +380,66 @@ class StellarAdapter(MultiRailBroker):
                     raw_response=response,
                 )
             else:
-                return SettlementResult(
+                result = SettlementResult(
                     order_id=order.order_id,
                     success=False,
                     error_message=response.get("result_xdr", "Transaction failed"),
                     status="failed",
                     raw_response=response,
                 )
-                
+            self._record_submission(order.order_id, result)
+            return result
+
         except Exception as e:
             elapsed = time.time() - start_time
             logger.error(f"[Stellar] Settlement failed: {e}")
-            return SettlementResult(
+            result = SettlementResult(
                 order_id=order.order_id,
                 success=False,
                 error_message=str(e),
                 status="failed",
                 settlement_time_seconds=elapsed,
             )
-    
+            self._record_submission(order.order_id, result)
+            return result
+
+    def _check_prior_settlement(self, order_id: str) -> Optional[SettlementResult]:
+        prior = self._submitted_ids.get(order_id)
+        if prior is None:
+            return None
+        status = prior.get("status")
+        if status in {"filled", "failed", "cancelled"}:
+            return SettlementResult(
+                order_id=order_id,
+                success=bool(prior.get("success")),
+                fill_price=prior.get("fill_price"),
+                fill_quantity=prior.get("fill_quantity"),
+                fees_usd=float(prior.get("fees_usd") or 0),
+                settlement_time_seconds=float(prior.get("settlement_time_seconds") or 0),
+                tx_hash=prior.get("tx_hash"),
+                status=status,
+                error_message=prior.get("error_message"),
+                raw_response=prior.get("raw_response") or {},
+            )
+        pending = prior.get("result")
+        if pending is not None:
+            return pending
+        return None
+
+    def _record_submission(self, order_id: str, result: SettlementResult) -> None:
+        self._submitted_ids[order_id] = {
+            "success": result.success,
+            "status": result.status,
+            "fill_price": result.fill_price,
+            "fill_quantity": result.fill_quantity,
+            "fees_usd": result.fees_usd,
+            "settlement_time_seconds": result.settlement_time_seconds,
+            "tx_hash": result.tx_hash,
+            "error_message": result.error_message,
+            "raw_response": result.raw_response,
+            "result": result if result.status == "pending" else None,
+        }
+
     def _mock_settlement(self, order: SettlementOrder, start_time: float) -> SettlementResult:
         """Mock settlement for buildathon demo."""
         elapsed = time.time() - start_time

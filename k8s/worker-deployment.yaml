@@ -1,0 +1,46 @@
+Name: carib-clear-worker
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carib-clear-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: carib-clear-worker
+  template:
+    metadata:
+      labels:
+        app: carib-clear-worker
+    spec:
+      serviceAccountName: carib-clear-worker
+      containers:
+        - name: worker
+          image: carib-clear:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "carib_clear.worker"]
+          env:
+            - name: CARIB_CLEAR_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: carib-clear-secrets
+                  key: database-url
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          readinessProbe:
+            exec:
+              command: ["python", "-m", "carib_clear.worker.health"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["python", "-m", "carib_clear.worker.health"]
+            initialDelaySeconds: 15
+            periodSeconds: 30

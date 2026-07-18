@@ -105,4 +105,5 @@ echo ""
 echo -e "  ${YELLOW}Press Ctrl+C to stop${NC}"
 echo ""
 
+export PYTHONPATH="/Users/ralphucious/CARIB-CLEAR${PYTHONPATH:+:$PYTHONPATH}"
 uvicorn carib_clear.api:app --host "$HOST" --port "$PORT"

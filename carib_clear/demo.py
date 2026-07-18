@@ -120,7 +120,7 @@ def run_fx_swap_demo(live: bool = False, runner: Any = None) -> None:
 
     reg = PluginRegistry()
     reg.discover()
-    rail_ids = ["stellar_usdc", "local_ach", "mobile_money", "terrapay"]
+    rail_ids = ["stellar_usdc", "local_ach", "mobile_money", "terrapay", "capss", "idb_pay"]
     rails: List[Any] = []
     for rid in rail_ids:
         rail: Optional[Any] = None
@@ -135,6 +135,10 @@ def run_fx_swap_demo(live: bool = False, runner: Any = None) -> None:
         elif rid == "mobile_money":
             rail = reg.instantiate(rid, config={"provider": "moncash"})
         elif rid == "terrapay":
+            rail = reg.instantiate(rid, config={"mock_mode": mock_mode})
+        elif rid == "capss":
+            rail = reg.instantiate(rid, config={"mock_mode": mock_mode})
+        elif rid == "idb_pay":
             rail = reg.instantiate(rid, config={"mock_mode": mock_mode})
         if rail is not None:
             rails.append(rail)

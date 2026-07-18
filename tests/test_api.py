@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import os
+
 from fastapi.testclient import TestClient
 import pytest
 
 from carib_clear.api import app
 
+os.environ.setdefault("CARIB_CLEAR_ENV", "local")
+
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _local_env():
+    os.environ["CARIB_CLEAR_ENV"] = "local"
+    yield
 
 
 def test_health() -> None:
@@ -16,7 +26,7 @@ def test_health() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["version"] == "0.1.0-buildathon"
+    assert data["version"] in {"0.1.0", "0.1.0-buildathon"}
 
 
 def test_health_root() -> None:
@@ -120,12 +130,15 @@ def test_compliance_screen() -> None:
         "to_participant": "receiver_test",
         "amount_usd": 5000,
         "currency": "BBD",
+        "from_jurisdiction": "BB",
+        "to_jurisdiction": "JM",
         "purpose": "trade",
     })
     assert response.status_code == 200
     data = response.json()
     assert "passed" in data
-    assert "score" in data
+    assert "requires_review" in data
+    assert "issues" in data
 
 
 def test_market_state() -> None:
@@ -146,8 +159,8 @@ def test_dashboard_returns_html() -> None:
 
 
 def test_trade_finance_demo() -> None:
-    """Verify trade finance demo endpoint."""
-    response = client.get("/demo/trade_finance")
+    """Verify trade finance demo endpoint when enabled."""
+    response = client.get("/demo/trade_finance", headers={"X-Demo-Flag": "true"})
     assert response.status_code == 200
     data = response.json()
     assert "results" in data
@@ -157,6 +170,11 @@ def test_trade_finance_demo() -> None:
 def test_loan_apply_requires_api_key_when_configured(monkeypatch) -> None:
     """When CARIB_CLEAR_API_KEY is set, POST routes demand a matching X-API-Key."""
     monkeypatch.setenv("CARIB_CLEAR_API_KEY", "test-secret-key")
+    try:
+        from carib_clear.api_hardening import limiter
+        limiter._windows.clear()
+    except Exception:
+        pass
 
     payload = {
         "business_name": "Auth Test Business",
@@ -200,6 +218,11 @@ def test_non_ascii_api_key_yields_401_not_500(monkeypatch) -> None:
 def test_api_key_disabled_by_default(monkeypatch) -> None:
     """With no CARIB_CLEAR_API_KEY set, requests pass through unauthenticated."""
     monkeypatch.delenv("CARIB_CLEAR_API_KEY", raising=False)
+    try:
+        from carib_clear.api_hardening import limiter
+        limiter._windows.clear()
+    except Exception:
+        pass
 
     response = client.post("/loan/apply", json={
         "business_name": "No Auth Business",

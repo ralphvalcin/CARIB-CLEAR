@@ -1,0 +1,98 @@
+## Default values for carib-clear chart.
+## Override via --set or values-*.yaml.
+
+#
+# Specify a concrete image tag per environment in CI/values-*.yaml.
+# Do not rely on `latest`.
+# We keep this file non-committed in CI/CD via .gitignore.
+global:
+  environment: local
+  image:
+    repository: carib-clear
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  serviceAccount:
+    create: true
+    name: carib-clear
+
+  database:
+    url: sqlite:///carib_clear.db
+
+api:
+  enabled: true
+  name: api
+  replicaCount: 2
+  port: 8000
+  servicePort: 80
+  serviceType: ClusterIP
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  health:
+    readyPath: /readyz
+    livePath: /livez
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 65
+
+  env:
+    allowedOrigins: "http://localhost:5173,https://caribclear.app"
+    secretBackend: ""
+    webhookSecret: changeme-webhook-secret-rotate-for-production
+    webhookTimeoutSeconds: "10"
+    env: "local"
+
+worker:
+  enabled: true
+  name: worker
+  replicaCount: 1
+  port: 8000
+  command:
+    - "python"
+    - "-m"
+    - "carib_clear.worker"
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  health:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 6
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  env:
+    env: "local"
+    complianceLists: ""
+
+ingress:
+  enabled: false
+  className: ""
+  host: caribclear.local
+  path: /
+  pathType: Prefix

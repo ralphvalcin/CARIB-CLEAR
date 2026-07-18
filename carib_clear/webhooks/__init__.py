@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -260,6 +261,23 @@ class WebhookDispatcher:
             self._http = httpx
         return self._http
 
+    def _build_envelope(self, event_type: str, event_id: str,
+                        participant_id: str, timestamp: str,
+                        payload: Dict[str, Any], webhook_id: str) -> Dict[str, Any]:
+        delivery_id = f"del_{uuid.uuid4().hex[:12]}"
+        return {
+            "event_type": event_type,
+            "event_id": event_id,
+            "participant_id": participant_id,
+            "timestamp": timestamp,
+            "data": payload,
+            "delivery": {
+                "delivery_id": delivery_id,
+                "attempt_number": 1,
+                "webhook_id": webhook_id,
+            },
+        }
+
     def dispatch(self, event_type: str, payload: Dict[str, Any],
                  participant_id: Optional[str] = None) -> List[DeliveryAttempt]:
         """Dispatch an event to all matching webhooks.
@@ -279,11 +297,25 @@ class WebhookDispatcher:
             logger.debug("[Webhooks] No subscribers for %s", event_type)
             return []
 
-        payload_bytes = json.dumps(payload).encode()
+        event_id = f"evt_{uuid.uuid4().hex[:12]}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+
         results: List[DeliveryAttempt] = []
 
         for wh in subscribers:
-            attempt = self._deliver(wh, event_type, payload, payload_bytes)
+            pid = participant_id or wh.participant_id
+            envelope = self._build_envelope(
+                event_type=event_type,
+                event_id=event_id,
+                participant_id=pid,
+                timestamp=timestamp,
+                payload=payload,
+                webhook_id=wh.webhook_id,
+            )
+            payload_bytes = json.dumps(envelope).encode()
+            attempt = self._deliver(wh, event_type, envelope, payload_bytes, event_id=event_id)
+            if attempt.status != "success":
+                self._queue_failed_delivery(attempt)
             self.registry.record_delivery(attempt)
             results.append(attempt)
 
@@ -292,32 +324,61 @@ class WebhookDispatcher:
                      event_type, success_count, len(results))
         return results
 
+    def _queue_failed_delivery(self, attempt: DeliveryAttempt) -> None:
+        """Persist a failed delivery for later retry outside the request path."""
+        try:
+            queued = {
+                "delivery_id": attempt.delivery_id,
+                "webhook_id": attempt.webhook_id,
+                "event_type": attempt.event_type,
+                "payload": attempt.payload,
+                "attempt_number": attempt.attempt_number,
+                "error_message": attempt.error_message,
+                "status": "queued",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            self.registry.db.insert("webhook_delivery_queue", queued)
+        except Exception as exc:
+            logger.warning("[Webhooks] Failed to queue delivery %s: %s", attempt.delivery_id, exc)
+
     def _deliver(self, wh: WebhookRegistration, event_type: str,
-                 payload: Dict[str, Any], payload_bytes: bytes) -> DeliveryAttempt:
-        """Deliver a single webhook with retry logic."""
+                 envelope: Dict[str, Any], payload_bytes: bytes,
+                 event_id: str) -> DeliveryAttempt:
+        """Deliver a single webhook with bounded retries."""
         import httpx
 
-        signature = wh.sign_payload(payload_bytes)
+        def _sign(body: bytes) -> str:
+            return wh.sign_payload(body)
+
         headers = {
             "Content-Type": "application/json",
             "X-CARIB-CLEAR-Event": event_type,
-            "X-CARIB-CLEAR-Signature": signature,
-            "X-CARIB-CLEAR-Delivery": uuid.uuid4().hex,
+            "X-CARIB-CLEAR-Signature": _sign(payload_bytes),
+            "X-CARIB-CLEAR-Delivery": envelope["delivery"]["delivery_id"],
+            "X-CARIB-CLEAR-Event-ID": event_id,
             "User-Agent": "CARIB-CLEAR-Webhook/1.0",
         }
 
+        timeout = float(os.getenv("CARIB_CLEAR_WEBHOOK_TIMEOUT_SECONDS", str(wh.timeout_seconds)))
+        max_attempts = min(max(int(wh.retry_count), 1), 10)
         t0 = time.time()
 
-        for attempt_num in range(1, wh.retry_count + 1):
+        last_attempt = None
+        for attempt_num in range(1, max_attempts + 1):
+            envelope["delivery"]["attempt_number"] = attempt_num
+            payload_bytes = json.dumps(envelope).encode()
+            headers["X-CARIB-CLEAR-Signature"] = _sign(payload_bytes)
+            headers["X-CARIB-CLEAR-Delivery"] = envelope["delivery"]["delivery_id"]
+
             try:
-                with httpx.Client(timeout=wh.timeout_seconds) as client:
+                with httpx.Client(timeout=timeout) as client:
                     resp = client.post(wh.url, content=payload_bytes, headers=headers)
 
                 duration_ms = (time.time() - t0) * 1000
-                attempt = DeliveryAttempt(
+                last_attempt = DeliveryAttempt(
                     webhook_id=wh.webhook_id,
                     event_type=event_type,
-                    payload=payload,
+                    payload=envelope,
                     status="success" if resp.is_success else "failed",
                     status_code=resp.status_code,
                     attempt_number=attempt_num,
@@ -325,30 +386,31 @@ class WebhookDispatcher:
                     error_message="" if resp.is_success else f"HTTP {resp.status_code}",
                 )
                 if resp.is_success:
-                    return attempt
+                    return last_attempt
 
                 logger.warning("[Webhooks] %s attempt %d/%d: HTTP %d",
-                               wh.webhook_id[:12], attempt_num, wh.retry_count, resp.status_code)
+                               wh.webhook_id[:12], attempt_num, max_attempts, resp.status_code)
 
             except Exception as exc:
                 duration_ms = (time.time() - t0) * 1000
                 error_msg = str(exc)[:200]
-                attempt = DeliveryAttempt(
+                last_attempt = DeliveryAttempt(
                     webhook_id=wh.webhook_id,
                     event_type=event_type,
-                    payload=payload,
+                    payload=envelope,
                     status="failed",
                     error_message=error_msg,
                     attempt_number=attempt_num,
                     duration_ms=round(duration_ms, 1),
                 )
                 logger.warning("[Webhooks] %s attempt %d/%d: %s",
-                               wh.webhook_id[:12], attempt_num, wh.retry_count, error_msg)
+                               wh.webhook_id[:12], attempt_num, max_attempts, error_msg)
 
-            if attempt_num < wh.retry_count:
-                time.sleep(2 ** attempt_num)  # Exponential backoff
+            if attempt_num < max_attempts:
+                backoff = min(2 ** attempt_num, 60)
+                time.sleep(backoff)
 
-        return attempt  # Last failed attempt
+        return last_attempt  # type: ignore[return-value]
 
 
 # ─── Global singleton ─────────────────────────────────────────────────

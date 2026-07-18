@@ -105,7 +105,7 @@ def fetch_kreyol_wikipedia(output_path: str, max_articles: int = 50000) -> int:
             "title": article.get("title", ""),
             "url": f"https://ht.wikipedia.org/wiki/{article.get('title','').replace(' ', '_')}",
             "license": "CC BY-SA 3.0",
-            "text_hash": hashlib.md5(text.encode()).hexdigest(),
+            "text_hash": hashlib.sha256(text.encode()).hexdigest(),
         }
         append_jsonl(output_path, entry)
         count += 1
@@ -158,7 +158,7 @@ def fetch_bible_creole(output_path: str) -> int:
                     "chapter": ch,
                     "url": url,
                     "license": "Public Domain",
-                    "text_hash": hashlib.md5(passage_text.encode()).hexdigest(),
+                    "text_hash": hashlib.sha256(passage_text.encode()).hexdigest(),
                 }
                 append_jsonl(output_path, entry)
                 count += 1
@@ -194,7 +194,7 @@ def fetch_oscar_kreyol(output_path: str, max_rows: int = 100000) -> int:
         text = normalize_kreyol_text(text)
         if not is_good_quality(text):
             continue
-        h = hashlib.md5(text.encode()).hexdigest()
+        h = hashlib.sha256(text.encode()).hexdigest()
         if h in seen_hashes:
             continue
         seen_hashes.add(h)
@@ -235,9 +235,9 @@ def fetch_mozilla_cv(output_path: str) -> int:
     for row in tqdm_dataset:
         text = row.get("sentence", "")
         text = normalize_kreyol_text(text)
-        if not is_good_quality(text, min_len=10, max_len=5000):
+        if not is_good_quality(text, min_len=10, max_length=5000):
             continue
-        h = hashlib.md5(text.encode()).hexdigest()
+        h = hashlib.sha256(text.encode()).hexdigest()
         if h in seen_hashes:
             continue
         seen_hashes.add(h)
@@ -275,7 +275,7 @@ def fetch_wikipedia_fallback(output_path: str) -> int:
             "title": title,
             "url": f"https://ht.wikipedia.org/wiki/{title.replace(' ', '_')}",
             "license": "CC BY-SA 3.0",
-            "text_hash": hashlib.md5(text.encode()).hexdigest(),
+            "text_hash": hashlib.sha256(text.encode()).hexdigest(),
         }
         append_jsonl(output_path, entry)
         count += 1

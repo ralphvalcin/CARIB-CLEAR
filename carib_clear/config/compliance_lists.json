@@ -1,0 +1,23 @@
+{
+  "cache": { "max_size": 2048, "ttl_seconds": 600 },
+  "sources": {
+    "default-keywords": { "type": "keywords", "active": true, "config": {} }
+  },
+  "keywords": {
+    "sanctions": [
+      "specially designated national",
+      "blocked person",
+      "terrorist",
+      "narcotics trafficking",
+      "money laundering"
+    ],
+    "pep": [
+      "minister",
+      "president",
+      "governor",
+      "senator",
+      "deputy",
+      "ambassador"
+    ]
+  }
+}

@@ -461,7 +461,7 @@ def create_sep31_router(server: SEP31Server):
             "message": tx.message,
         }
 
-    @router.get("/transactions")
+    @router.get("/transactions", dependencies=[Depends(require_api_key)])
     async def sep31_list_transactions(limit: int = 20):
         txs = server.list_transactions(limit=limit)
         return {
@@ -473,7 +473,7 @@ def create_sep31_router(server: SEP31Server):
             ]
         }
 
-    @router.get("/transactions/{transaction_id}")
+    @router.get("/transactions/{transaction_id}", dependencies=[Depends(require_api_key)])
     async def sep31_get_transaction(transaction_id: str):
         tx = server.get_transaction(transaction_id)
         if not tx:
@@ -513,7 +513,7 @@ def create_sep31_router(server: SEP31Server):
             "message": customer.status_message,
         }
 
-    @router.get("/customer/{customer_id}")
+    @router.get("/customer/{customer_id}", dependencies=[Depends(require_api_key)])
     async def sep12_get_customer(customer_id: str):
         customer = server.get_customer(customer_id)
         if not customer:

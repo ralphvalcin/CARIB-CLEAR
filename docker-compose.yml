@@ -1,9 +1,8 @@
 services:
-  carib-clear:
+  # Option 1: CLI demo (runs tests + demo, no server)
+  demo:
     build: .
     container_name: carib-clear-demo
-    ports:
-      - "8080:8080"
     environment:
       - STELLAR_INTEGRATION_TEST=0
     command: >
@@ -13,4 +12,18 @@ services:
         echo '' &&
         echo '=== CARIB-CLEAR Buildathon Demo ===' &&
         python3 -m carib_clear.demo full
+      "
+
+  # Option 2: API server + dashboard (for judges to interact with)
+  api:
+    build: .
+    container_name: carib-clear-api
+    ports:
+      - "8000:8000"
+    environment:
+      - STELLAR_INTEGRATION_TEST=0
+    command: >
+      sh -c "
+        echo '=== API Server Starting ===' &&
+        python3 -m uvicorn carib_clear.api:app --host 0.0.0.0 --port 8000
       "

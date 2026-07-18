@@ -1,0 +1,27 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "carib-clear.name" . }}-ingress
+  labels:
+    {{- include "carib-clear.labels" . | nindent 4 }}
+  {{- if .Values.ingress.className }}
+  annotations:
+    kubernetes.io/ingress.className: {{ .Values.ingress.className }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: {{ .Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "carib-clear.api.name" . }}
+                port:
+                  number: {{ .Values.api.servicePort }}
+{{- end }}

@@ -197,7 +197,7 @@ class MultiRailRouter:
     
     def __init__(self, brokers: List[MultiRailBroker]):
         self.brokers = {b.rail_id: b for b in brokers}
-    
+
     def find_best_rail(
         self,
         from_currency: str,

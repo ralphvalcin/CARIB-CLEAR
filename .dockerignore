@@ -4,25 +4,25 @@
 # Allow project source
 !pyproject.toml
 !README.md
+!LICENSE
 !carib_clear/
 !tests/
-!scripts/
-!config/
-!secrets/
-!Dockerfile.gpu
-!docker-compose.gpu.yml
 
-# Exclude large/unnecessary files within allowed dirs
+# Exclude unnecessary within allowed dirs
 **/__pycache__/
 **/*.pyc
 **/.DS_Store
-**/.git/
+**/*.db
 
 # Exclude other projects
 jarvis/
 trading-system/
 kreyol-ai/
 
-# Exclude plan files
+# Exclude build artifacts
 plans/
 .hermes/
+.git/
+.gitignore
+.github/
+*.md

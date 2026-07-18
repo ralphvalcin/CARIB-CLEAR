@@ -1,0 +1,16 @@
+{{- if .Values.api.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "carib-clear.api.name" . }}
+  labels:
+    {{- include "carib-clear.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.api.serviceType }}
+  ports:
+    - port: {{ .Values.api.servicePort }}
+      targetPort: {{ .Values.api.port }}
+      protocol: TCP
+  selector:
+    app: carib-clear
+{{- end }}
