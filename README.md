@@ -64,28 +64,30 @@ The full demo completes in ~4 seconds and shows:
 ## Project Structure
 
 ```
-carib_clear/
-├── demo.py                     # CLI demo (4 commands)
+```carib_clear/
 ├── agents/
-│   ├── flow_visibility.py      # Currency demand/supply detection
-│   ├── p2p_matching.py         # P2P FX order book + matching
-│   ├── net_settlement.py       # Multilateral netting
-│   ├── compliance.py           # Multi-jurisdiction KYC/AML
-│   ├── data_aggregation.py     # POS/Invoice/Bank/Tax ETL
-│   ├── credit_profile.py       # 5 C's AI cash-flow scoring
-│   └── cash_flow_lending.py    # Loan decision + lender submission
+│   ├── compliance.py           # Legacy compat → core screening engine
+│   ├── flow_visibility.py
+│   ├── p2p_matching.py
+│   ├── net_settlement.py
+│   ├── data_aggregation.py
+│   ├── credit_profile.py
+│   └── cash_flow_lending.py
 ├── broker/
-│   ├── base.py                 # MultiRailBroker ABC
-│   ├── stellar_adapter.py      # Stellar/USDC settlement
-│   ├── ach_adapter.py          # Local ACH settlement
-│   ├── mobile_money_adapter.py # Mobile money settlement
-│   ├── lender_base.py          # LenderAdapter ABC
-│   └── lender_adapters.py      # Barita, JMMB, IDB Invest
+│   ├── stellar_adapter.py
+│   ├── lender_base.py
+│   └── lender_adapters.py
 ├── governance/
-│   ├── agent.py                # FX + MSME credit approval
-│   └── approval.py             # SQLite approval queue
+│   ├── agent.py
+│   └── approval.py
+├── compliance/
+│   ├── screening.py
+│   ├── providers.py
+│   └── cache.py
+├── static/
+│   └── operator.html
 └── config/
-    └── thresholds.json          # Governance thresholds
+    └── thresholds.json
 ```
 
 ## Testing
