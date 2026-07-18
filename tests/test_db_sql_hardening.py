@@ -145,6 +145,29 @@ def test_quote_identifier_rejects_injectionish_table_name() -> None:
         db._quote_identifier("settle'ments")
 
 
+def test_migrate_add_column_is_additive_and_missing_column_appears():
+    db = Database(":memory:")
+    db.init_schema()
+    db.insert("participants", {
+        "participant_id": "mig-1",
+        "type": "msme",
+        "name": "Migration Test",
+        "jurisdiction": "HT",
+        "status": "pending",
+        "metadata": "{}",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+    })
+    before_rows = db._conn.execute('PRAGMA table_info("participants")').fetchall()
+    before_columns = {row[1] for row in before_rows}
+    assert "migrated_flag" not in before_columns
+
+    db._migrate_add_column("participants", "migrated_flag")
+    after_rows = db._conn.execute('PRAGMA table_info("participants")').fetchall()
+    after_columns = {row[1] for row in after_rows}
+    assert "migrated_flag" in after_columns
+
+
 def test_audit_trail_rejects_delete_and_update() -> None:
     db = Database(":memory:")
     db.init_schema()

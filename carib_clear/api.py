@@ -39,13 +39,21 @@ app = FastAPI(
 )
 
 # Allow CORS for browser-based demos
-# In production, set CARIB_CLEAR_ALLOWED_ORIGINS to a comma-separated list
+# Deny-by-default unless an allowlist is configured or local demo is explicit.
+_FALLBACK_PROD_ORIGIN = "https://carib-clear.onrender.com"
+
+
 def _build_cors_origins() -> List[str]:
     env_name = os.getenv("CARIB_CLEAR_ENV", "local").lower()
     raw = get_secret("CARIB_CLEAR_ALLOWED_ORIGINS", "")
-    if not raw and env_name == "local":
-        raw = "http://localhost:5173"
-    return [o.strip() for o in raw.split(",") if o.strip()]
+    origins = [o.strip() for o in raw.split(",") if o.strip()]
+    if not origins:
+        if env_name == "local":
+            origins = ["http://localhost:5173"]
+        else:
+            origins = [_FALLBACK_PROD_ORIGIN]
+    return origins
+
 
 origin_list = _build_cors_origins()
 

@@ -331,7 +331,7 @@ class WebhookDispatcher:
                 "delivery_id": attempt.delivery_id,
                 "webhook_id": attempt.webhook_id,
                 "event_type": attempt.event_type,
-                "payload": attempt.payload,
+                "payload": json.dumps(attempt.payload or {}),
                 "attempt_number": attempt.attempt_number,
                 "error_message": attempt.error_message,
                 "status": "queued",
