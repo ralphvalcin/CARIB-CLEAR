@@ -1057,12 +1057,22 @@ async def onboard_participant(request: ComplianceOnboardRequest, identity: Authe
     if not participant_id:
         raise HTTPException(status_code=400, detail="participant_id is required")
 
+    from carib_clear.db import get_db
+
+    jurisdiction = (request.jurisdiction or "").strip().upper()
+    if not jurisdiction and identity.participant_id:
+        participant = get_db().get_participant(identity.participant_id)
+        if participant:
+            jurisdiction = participant.get("jurisdiction", "").strip().upper() or jurisdiction
+    if not jurisdiction:
+        raise HTTPException(status_code=422, detail="jurisdiction is required")
+
     listing_path = os.getenv("CARIB_CLEAR_COMPLIANCE_LISTS", "")
     engine = ComplianceScreeningEngine(lists_path=listing_path)
     engine.initialize()
     result = engine.onboard_participant(
         participant_id=participant_id,
-        jurisdiction=request.jurisdiction,
+        jurisdiction=jurisdiction,
         kyc_documents=request.documents,
     )
 
@@ -1092,17 +1102,27 @@ async def onboard_participant(request: ComplianceOnboardRequest, identity: Authe
 
 
 @app.post("/compliance/screen", tags=["Compliance"], dependencies=[Depends(require_api_key)])
-async def screen_transaction(request: TransactionScreenRequest):
+async def screen_transaction(request: TransactionScreenRequest, identity: AuthenticatedIdentity = Depends(require_api_key)):
     """Screen a transaction for compliance."""
     from carib_clear.db import get_db
 
     listing_path = os.getenv("CARIB_CLEAR_COMPLIANCE_LISTS")
-    engine = ComplianceScreeningEngine(lists_path=listing_path)
-    engine.initialize()
     from_jurisdiction = (request.from_jurisdiction or "").strip().upper()
     to_jurisdiction = (request.to_jurisdiction or "").strip().upper()
     if not from_jurisdiction or not to_jurisdiction:
-        raise HTTPException(status_code=400, detail="from_jurisdiction and to_jurisdiction are required")
+        if identity.participant_id:
+            participant = get_db().get_participant(identity.participant_id)
+            if participant:
+                fallback = participant.get("jurisdiction", "").strip().upper()
+                if not from_jurisdiction:
+                    from_jurisdiction = fallback
+                if not to_jurisdiction:
+                    to_jurisdiction = fallback
+    if not from_jurisdiction or not to_jurisdiction:
+        raise HTTPException(status_code=422, detail="from_jurisdiction and to_jurisdiction are required")
+
+    engine = ComplianceScreeningEngine(lists_path=listing_path)
+    engine.initialize()
     result = engine.screen_transaction(
         transaction_id=f"api-{uuid.uuid4().hex[:12]}",
         from_participant=request.from_participant,
@@ -1169,28 +1189,28 @@ async def review_compliance_queue(request: ComplianceReviewDecision):
     return {"queue_id": request.queue_id, "status": request.status, "reviewer_id": request.reviewer_id}
 
 
-@app.post("/compliance/reload-lists", tags=["Compliance"], dependencies=[Depends(require_api_key)])
-async def reload_compliance_lists(request: Request, token: Optional[str] = None, identity: AuthenticatedIdentity = Depends(require_api_key)):
-    """Reload compliance lists from current env-configured file with audit and admin guard."""
+@app.post("/compliance/reload-lists", tags=["Compliance"], dependencies=[Depends(require_admin)])
+async def reload_compliance_lists(admin: AuthenticatedIdentity = Depends(require_admin)):
+    """Reload compliance lists from current env-configured file with admin audit."""
     from carib_clear.config_reloader import reload_compliance_lists as reloader
 
-    reload_token = os.getenv("CARIB_CLEAR_COMPLIANCE_RELOAD_TOKEN", "")
-    environment = os.getenv("CARIB_CLEAR_ENV", "local")
-    if reload_token:
-        provided = token or request.headers.get("X-Reload-Token", "")
-        if provided != reload_token:
-            raise HTTPException(status_code=403, detail="reload token required")
-    elif environment not in {"local", "demo"}:
-        raise HTTPException(status_code=403, detail="reload disabled outside local/demo")
-
     path = os.getenv("CARIB_CLEAR_COMPLIANCE_LISTS", "")
-    if not path:
-        raise HTTPException(status_code=400, detail="missing CARIB_CLEAR_COMPLIANCE_LISTS")
+    if not path or not os.path.exists(path) or os.path.getsize(path) == 0:
+        raise HTTPException(status_code=400, detail="missing or empty compliance list file")
 
-    actor = identity.participant_id or "api"
+    actor = admin.participant_id or "admin"
     result = reloader(path=path, actor=actor)
     if result.get("status") == "failed":
         raise HTTPException(status_code=400, detail=result.get("reason", "reload failed"))
+    _audit(
+        event="compliance.reload",
+        actor=actor,
+        action="reload_compliance_lists",
+        entity="compliance",
+        entity_id=path,
+        payload=result,
+        outcome="success",
+    )
     return result
 
 
@@ -1206,9 +1226,9 @@ async def list_compliance_checks(
     return {"checks": rows}
 
 
-@app.get("/compliance/lists", tags=["Compliance"], dependencies=[Depends(require_api_key)])
+@app.get("/compliance/lists", tags=["Compliance"], dependencies=[Depends(require_admin)])
 async def list_compliance_lists():
-    """Return loaded compliance list metadata for operators."""
+    """Return loaded compliance list metadata without exposing local filesystem paths."""
     from carib_clear.compliance.screening import ComplianceScreeningEngine
 
     listing_path = os.getenv("CARIB_CLEAR_COMPLIANCE_LISTS", "")
@@ -1223,7 +1243,6 @@ async def list_compliance_lists():
         source_count = 0
 
     return {
-        "file": listing_path,
         "source_count": source_count,
         "keyword_groups": keyword_groups,
     }
