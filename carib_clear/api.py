@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -1261,42 +1261,49 @@ class AuditQuery(BaseModel):
     offset: int = Field(0, ge=0)
 
 @app.get("/audit/events", tags=["Admin"], dependencies=[Depends(require_admin)])
-async def get_audit_events(request: Request, query: Optional[AuditQuery] = None):
+async def get_audit_events(
+    request: Request,
+    audit_id: Optional[str] = None,
+    event: Optional[str] = None,
+    entity: Optional[str] = None,
+    actor: Optional[str] = None,
+    outcome: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+):
+    print("DEBUG AUDIT EVENTS CALLED", dict(request.query_params), audit_id)
     """Query audit events with optional filters. Pass `audit_id` to return one record."""
     from carib_clear.audit import list_audit_trail_admin, count_audit_trail_admin, get_audit_by_id
     from carib_clear.db import get_db
 
-    params = query or AuditQuery()
     db = get_db()
 
-    if params.audit_id:
-        print('DEBUG AUDIT EVENTS: branch by id')
-        record = get_audit_by_id(params.audit_id, db=db)
-        print('DEBUG AUDIT EVENTS: record', record)
+    if audit_id:
+        record = get_audit_by_id(audit_id, db=db)
         if not record:
             raise HTTPException(status_code=404, detail="Audit record not found")
         return record
 
     rows = list_audit_trail_admin(
         db=db,
-        limit=int(params.limit),
-        offset=int(params.offset),
-        event=params.event,
-        entity=params.entity,
-        actor=params.actor,
-        outcome=params.outcome,
+        limit=int(limit),
+        offset=int(offset),
+        event=event,
+        entity=entity,
+        actor=actor,
+        outcome=outcome,
     )
     total = count_audit_trail_admin(
         db=db,
-        event=params.event,
-        entity=params.entity,
-        actor=params.actor,
-        outcome=params.outcome,
+        event=event,
+        entity=entity,
+        actor=actor,
+        outcome=outcome,
     )
     return {
         "total": total,
-        "limit": int(params.limit),
-        "offset": int(params.offset),
+        "limit": int(limit),
+        "offset": int(offset),
         "events": rows,
     }
 
