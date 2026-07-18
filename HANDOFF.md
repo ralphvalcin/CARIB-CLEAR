@@ -1,26 +1,22 @@
 # CARIB-CLEAR Session Handoff
 
 ## Completed in this session
-- Productization Phase 1-5 remediation and hardening committed as `63e2c43`
-- Helm lint passes; fixed `secret.yaml` syntax, `values.yaml` sensitive field, worker probe values wiring
-- `.env.example` expanded with production Postgres/PVC guidance and SQLite fail-fast notes
-- DB layer: thread-safe singleton with lock, `reset_db()` connection close before overwrite, `_TABLES` aligned to schema, credential log redaction
-- Phase 2: `/compliance/reload-lists` non-empty file validation + shape-consistent failure responses + dedicated tests
-- Phase 3: legacy compliance endpoints bridged to `ComplianceScreeningEngine`; `agents/compliance.py` becomes thin delegating bridge
-- Phase 4: admin audit `GET /audit/events`, write-failed regression coverage, secret-masking helpers in `audit.py`
-- Auth/routing: `/settlements` and `/demo/trade_finance` are API-key gated; demo remains behind `X-Demo-Flag`
-- Cross-cutting: centralized API version constant `DEFAULT_VERSION`; CORS helper with local-safe default origin
-- Integration test updated for auth-on-complaince-profile behavior; all targeted suites green
+- Productization hardening committed as `4127ec5`
+- Phase 5 optional K8s hardening: opt-in `PodDisruptionBudget`, `topologySpreadConstraints`, HPA safer defaults, README docs
+- Operator audit helper: `carib_clear/audit.py:get_audit_by_id()` returns masked single-record detail
+- Admin audit tests: added missing-record and secret-payload masking coverage
+- Auth/routing and cross-cutting version/CORS alignment intact from prior commit `63e2c43`
 
 ## Test status
-- Full suite: `296 passed, 1 skipped, 2 warnings`
+- Targeted suites green for implemented items: `tests/test_admin_audit.py`, `tests/test_api.py`, `tests/test_audit.py`
+- Latest full run baseline remains `296 passed, 1 skipped, 2 warnings`
 
-## Remaining
-- Optional operator detail endpoint `/audit/{audit_id}` wiring if operator UX requires per-event inspection
-- Phase 5 production ops extras: pod disruption budget, topology spread, HPA lower-bound sanity beyond README notes
-- Live Render endpoint verification if production deployment target is needed
+## Remaining / deferred
+- No CARIB-CLEAR service detected in Render workspace, so live Render endpoint validation is blocked until deployment exists
+- Operator UX detail routing deferred: dedicated `/audit/{audit_id}` route showed app-level 404 in this runtime; deferred rather than blind-rerouted
+- Optional deeper audit UX: unmask controls, review/action workflows if operator console is built
 
 ## Next options
-1. Continue Phase 5 ops hardening with live cluster validation
-2. Operator/admin UX polish for audit console
-3. Advance to next productization phase or deployment runbook validation
+1. Deploy CARIB-CLEAR to Render/your chosen target, then run live validation
+2. Revisit operator audit routing after diagnosing app route dispatch behavior
+3. Continue Phase 5 ops hardening with cluster-specific values/runbooks
